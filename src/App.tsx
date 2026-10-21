@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Pet, { type PetState } from "./components/Pet";
 import Bubble from "./components/Bubble";
@@ -14,7 +13,12 @@ import { saveCheckin, startCheckinScheduler, type Mood } from "./lib/checkin";
 import { recordInteraction, startFrictionDetector } from "./lib/friction";
 import { startRecapScheduler } from "./lib/recap";
 import { startReminderPoller } from "./lib/reminders";
-import type { PomState } from "./components/Pomodoro";
+import {
+  getPomodoroSnapshot,
+  startPomodoroEngine,
+  subscribePomodoro,
+  type PomPhase,
+} from "./lib/pomodoroEngine";
 
 const HISTORY_LIMIT = 6;
 const HEIGHT_OPEN = 320;
@@ -32,6 +36,11 @@ const NIGHT_END_HOUR = 7;
 function isNight(d = new Date()) {
   const h = d.getHours();
   return h >= NIGHT_START_HOUR || h < NIGHT_END_HOUR;
+}
+
+/** The resting face: focused while a pomodoro runs, otherwise idle. */
+function ambientState(): PetState {
+  return getPomodoroSnapshot().phase === "focus" ? "thinking" : "idle";
 }
 
 function App() {
@@ -74,7 +83,7 @@ function App() {
     if (flashTimerRef.current !== null) clearTimeout(flashTimerRef.current);
     setPetState(state);
     flashTimerRef.current = window.setTimeout(() => {
-      setPetState("idle");
+      setPetState(ambientState());
       flashTimerRef.current = null;
     }, ms);
   }, []);
@@ -183,14 +192,21 @@ function App() {
     return () => clearInterval(handle);
   }, []);
 
-  // The pomodoro timer lives in the dashboard window; it broadcasts its phase
-  // so the pet reflects it once the dashboard is closed again.
+  // The pomodoro timer lives here, in the always-alive pet window; the
+  // dashboard only sends commands and renders the state it broadcasts.
+  useEffect(() => startPomodoroEngine(), []);
+
+  // The pet's face and bubble follow the pomodoro phase. Every phase change
+  // lands somewhere definite, so no path can leave it stuck in focus mode.
   useEffect(() => {
-    const unlisten = listen<PomState>("pomodoro-state", ({ payload }) => {
-      if (payload === "working") {
+    let prev: PomPhase = getPomodoroSnapshot().phase;
+    return subscribePomodoro(({ phase }) => {
+      if (phase === prev) return;
+      prev = phase;
+      if (phase === "focus") {
         setPetState("thinking");
         setBubbleText("Focus mode. Timer's running.");
-      } else if (payload === "break") {
+      } else if (phase === "break") {
         flashState("excited", 15000);
         setBubbleText("Break time. Get up, stretch.");
       } else {
@@ -198,9 +214,6 @@ function App() {
         setBubbleText(DEFAULT_TEXT);
       }
     });
-    return () => {
-      unlisten.then((off) => off()).catch(console.error);
-    };
   }, [flashState]);
 
   // Escape closes whatever is open. ChatInput handles its own Escape while
@@ -265,7 +278,7 @@ function App() {
   const dismissCheckin = () => {
     touch();
     setShowCheckin(false);
-    setPetState("idle");
+    setPetState(ambientState());
     setBubbleText(DEFAULT_TEXT);
   };
 
@@ -369,7 +382,7 @@ function App() {
       () => {
         // onDone (normal completion or user-stop) — keep whatever streamed.
         setIsStreaming(false);
-        setPetState("idle");
+        setPetState(ambientState());
         if (acc) {
           setMessages((prev) =>
             [
@@ -383,7 +396,7 @@ function App() {
       },
       (err) => {
         setIsStreaming(false);
-        setPetState("idle");
+        setPetState(ambientState());
         setBubbleText(err);
         scheduleRevert();
       },

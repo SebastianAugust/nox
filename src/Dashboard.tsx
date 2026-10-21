@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getSettings } from "./lib/db";
 import {
@@ -24,7 +23,7 @@ import {
   type TodayStats,
   type TodoFilter,
 } from "./lib/db-helpers";
-import Pomodoro, { type PomState } from "./components/Pomodoro";
+import Pomodoro from "./components/Pomodoro";
 
 type Page =
   | "home"
@@ -872,11 +871,6 @@ function PagePomodoro() {
 
   useEffect(load, [load]);
 
-  // The pet lives in the other window, so the phase is broadcast to it.
-  const handleStateChange = useCallback((state: PomState) => {
-    emit("pomodoro-state", state).catch(console.error);
-  }, []);
-
   const formatClock = (stamp: string) =>
     new Date(stamp.replace(" ", "T") + "Z").toLocaleTimeString("id-ID", {
       hour: "2-digit",
@@ -886,7 +880,7 @@ function PagePomodoro() {
   return (
     <>
       <div style={{ ...card, padding: "26px 16px" }}>
-        <Pomodoro onStateChange={handleStateChange} onSessionSaved={load} />
+        <Pomodoro onSnapshot={load} />
       </div>
 
       <div>

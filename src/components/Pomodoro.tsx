@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  getSetting,
-  getTodayPomodoroSessions,
-  savePomodoroSession,
-  utcStamp,
-} from "../lib/db-helpers";
-
-export type PomState = "idle" | "working" | "break";
+import { emit, listen } from "@tauri-apps/api/event";
+import { getTodayPomodoroSessions } from "../lib/db-helpers";
+import type { PomCommand, PomPhase, PomSnapshot } from "../lib/pomodoroEngine";
 
 const DEFAULT_WORK_MINUTES = 25;
 const DEFAULT_BREAK_MINUTES = 5;
@@ -28,13 +23,13 @@ function ProgressRing({
 }: {
   seconds: number;
   total: number;
-  state: PomState;
+  state: PomPhase;
 }) {
   const RADIUS = 54;
   const circumference = 2 * Math.PI * RADIUS;
   const progress = total > 0 ? Math.min(1, Math.max(0, seconds / total)) : 0;
   const color =
-    state === "working" ? "#00e5a0" : state === "break" ? "#60a5fa" : "rgba(255,255,255,0.12)";
+    state === "focus" ? "#00e5a0" : state === "break" ? "#60a5fa" : "rgba(255,255,255,0.12)";
 
   return (
     <div style={{ position: "relative", width: 140, height: 140, margin: "0 auto 14px" }}>
@@ -87,7 +82,7 @@ function ProgressRing({
           {formatTime(seconds)}
         </div>
         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
-          {state === "working" ? "focus" : state === "break" ? "break" : "ready"}
+          {state === "focus" ? "focus" : state === "break" ? "break" : "ready"}
         </div>
       </div>
     </div>
@@ -95,145 +90,75 @@ function ProgressRing({
 }
 
 type Props = {
-  onStateChange?: (s: PomState) => void;
-  /** Fires after a session row is written, so callers can refresh their stats. */
-  onSessionSaved?: () => void;
+  /** Fires on every state snapshot, so callers can refresh their session list. */
+  onSnapshot?: (s: PomSnapshot) => void;
 };
 
-export function Pomodoro({ onStateChange, onSessionSaved }: Props) {
-  const [state, setState] = useState<PomState>("idle");
-  const [durations, setDurations] = useState({
-    work: DEFAULT_WORK_MINUTES,
-    break: DEFAULT_BREAK_MINUTES,
-  });
-  const [seconds, setSeconds] = useState(DEFAULT_WORK_MINUTES * 60);
+/**
+ * Pure view + remote control. The timer itself runs in the pet window
+ * (lib/pomodoroEngine.ts); this renders its latest snapshot and sends commands,
+ * so switching pages or closing the dashboard never touches a running session.
+ */
+export function Pomodoro({ onSnapshot }: Props) {
+  const [snap, setSnap] = useState<PomSnapshot | null>(null);
+  const [now, setNow] = useState(Date.now());
   const [sessionsToday, setSessionsToday] = useState(0);
 
-  // The timer runs off a wall-clock deadline rather than counting ticks, so a
-  // throttled/suspended background window cannot make it drift.
-  const endsAtRef = useRef(0);
-  const startedAtRef = useRef("");
-  const finishedRef = useRef(false);
-  const emittedRef = useRef<PomState | null>(null);
-
-  // Parent callbacks live in a ref: an inline arrow prop gets a new identity on
-  // every render, and these must not restart the timer or re-emit the phase.
-  const savedCb = useRef(onSessionSaved);
-  const stateCb = useRef(onStateChange);
-  savedCb.current = onSessionSaved;
-  stateCb.current = onStateChange;
+  const snapCb = useRef(onSnapshot);
+  snapCb.current = onSnapshot;
 
   const refreshSessions = useCallback(async () => {
     const rows = await getTodayPomodoroSessions();
     setSessionsToday(rows.filter((r) => r.completed === 1).length);
   }, []);
 
-  // Durations are user settings; today's count comes from the DB so it is
-  // right even after a restart mid-day.
+  // Subscribe first, then ask the pet for the current state, so the reply
+  // cannot arrive before we are listening.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const [work, brk] = await Promise.all([
-        getSetting("pomodoro_duration"),
-        getSetting("pomodoro_break"),
-      ]);
-      if (cancelled) return;
-      const next = {
-        work: Number(work) || DEFAULT_WORK_MINUTES,
-        break: Number(brk) || DEFAULT_BREAK_MINUTES,
-      };
-      setDurations(next);
-      setSeconds((prev) => (endsAtRef.current === 0 ? next.work * 60 : prev));
-      await refreshSessions();
-    })().catch(console.error);
+    const unlisten = listen<PomSnapshot>("pomodoro:state", ({ payload }) => {
+      setSnap(payload);
+      setNow(Date.now());
+      snapCb.current?.(payload);
+      refreshSessions().catch(console.error);
+    });
+    unlisten
+      .then(() => (cancelled ? undefined : emit("pomodoro:request")))
+      .catch(console.error);
+    refreshSessions().catch(console.error);
     return () => {
       cancelled = true;
+      unlisten.then((off) => off()).catch(console.error);
     };
   }, [refreshSessions]);
 
-  // Announce each phase change exactly once.
+  const state: PomPhase = snap?.phase ?? "idle";
+
+  // Only the display ticks here; the deadline lives in the pet window.
   useEffect(() => {
-    if (emittedRef.current === state) return;
-    emittedRef.current = state;
-    stateCb.current?.(state);
+    if (state === "idle") return;
+    const handle = setInterval(() => setNow(Date.now()), TICK_MS);
+    return () => clearInterval(handle);
   }, [state]);
 
-  // One interval per phase. On reaching the deadline it runs the transition
-  // exactly once (finishedRef), outside of any state updater — updaters run
-  // twice under StrictMode and must stay free of side effects.
-  useEffect(() => {
-    if (state === "idle") {
-      setSeconds(durations.work * 60);
-      return;
-    }
+  const focusSec = snap?.focusSec ?? DEFAULT_WORK_MINUTES * 60;
+  const breakSec = snap?.breakSec ?? DEFAULT_BREAK_MINUTES * 60;
+  const seconds =
+    snap?.endsAt != null
+      ? Math.max(0, Math.ceil((snap.endsAt - now) / 1000))
+      : focusSec;
 
-    finishedRef.current = false;
-
-    const tick = () => {
-      const remaining = Math.max(
-        0,
-        Math.ceil((endsAtRef.current - Date.now()) / 1000),
-      );
-      setSeconds(remaining);
-      if (remaining > 0 || finishedRef.current) return;
-      finishedRef.current = true;
-
-      if (state === "working") {
-        savePomodoroSession({
-          duration_minutes: durations.work,
-          break_minutes: durations.break,
-          completed: true,
-          started_at: startedAtRef.current,
-        })
-          .then(refreshSessions)
-          .then(() => savedCb.current?.())
-          .catch(console.error);
-        endsAtRef.current = Date.now() + durations.break * 60000;
-        setState("break");
-      } else {
-        setState("idle");
-      }
-    };
-
-    tick();
-    const handle = setInterval(tick, TICK_MS);
-    return () => clearInterval(handle);
-  }, [state, durations, refreshSessions]);
-
-  const start = () => {
-    startedAtRef.current = utcStamp();
-    endsAtRef.current = Date.now() + durations.work * 60000;
-    setSeconds(durations.work * 60);
-    setState("working");
-  };
-
-  const stop = () => {
-    // Only a work phase that is cut short is worth recording as abandoned.
-    if (state === "working") {
-      const elapsedMinutes = Math.round(
-        (durations.work * 60 - seconds) / 60,
-      );
-      savePomodoroSession({
-        duration_minutes: elapsedMinutes,
-        break_minutes: durations.break,
-        completed: false,
-        started_at: startedAtRef.current,
-      })
-        .then(() => savedCb.current?.())
-        .catch(console.error);
-    }
-    endsAtRef.current = 0;
-    setState("idle");
-  };
+  const send = (type: PomCommand["type"]) =>
+    emit("pomodoro:cmd", { type } satisfies PomCommand).catch(console.error);
 
   const label =
-    state === "idle" ? "Ready" : state === "working" ? "Focus time" : "Break time";
+    state === "idle" ? "Ready" : state === "focus" ? "Focus time" : "Break time";
 
   return (
     <div style={{ textAlign: "center" }}>
       <ProgressRing
         seconds={seconds}
-        total={(state === "break" ? durations.break : durations.work) * 60}
+        total={state === "break" ? breakSec : focusSec}
         state={state}
       />
       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 16 }}>
@@ -242,7 +167,7 @@ export function Pomodoro({ onStateChange, onSessionSaved }: Props) {
       <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
         {state === "idle" ? (
           <button
-            onClick={start}
+            onClick={() => send("start")}
             style={{
               padding: "7px 20px",
               borderRadius: 8,
@@ -258,7 +183,7 @@ export function Pomodoro({ onStateChange, onSessionSaved }: Props) {
           </button>
         ) : (
           <button
-            onClick={stop}
+            onClick={() => send(state === "focus" ? "stop" : "skip")}
             style={{
               padding: "7px 20px",
               borderRadius: 8,
@@ -269,7 +194,7 @@ export function Pomodoro({ onStateChange, onSessionSaved }: Props) {
               cursor: "pointer",
             }}
           >
-            {state === "working" ? "Stop" : "Skip break"}
+            {state === "focus" ? "Stop" : "Skip break"}
           </button>
         )}
       </div>
