@@ -1,4 +1,5 @@
 import { getDb } from "./db";
+import type { ChatMessage } from "./ollama";
 
 // ── TIME ──
 // SQLite stores timestamps in UTC (datetime('now')), but "today" means the
@@ -153,6 +154,31 @@ export async function getReminders(): Promise<ReminderRow[]> {
 export async function deleteReminder(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM reminders WHERE id = ?", [id]);
+}
+
+// ── CONVERSATION ──
+/** The last `limit` chat messages, oldest first. */
+export async function getRecentMessages(limit: number): Promise<ChatMessage[]> {
+  const db = await getDb();
+  const rows = await db.select<ChatMessage[]>(
+    "SELECT role, content FROM conversations ORDER BY id DESC LIMIT ?",
+    [limit],
+  );
+  return rows.reverse();
+}
+
+/** Store one question and its answer. */
+export async function saveChatTurn(question: string, answer: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "INSERT INTO conversations (role, content) VALUES ('user', ?), ('assistant', ?)",
+    [question, answer],
+  );
+}
+
+export async function clearConversation(): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM conversations");
 }
 
 // ── HABITS ──

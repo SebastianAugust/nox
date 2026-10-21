@@ -5,9 +5,17 @@ import Pet, { type PetState } from "./components/Pet";
 import Bubble from "./components/Bubble";
 import ChatInput from "./components/ChatInput";
 import CheckinPrompt from "./components/CheckinPrompt";
-import { chat, type ChatMessage } from "./lib/ollama";
+import { chat, HISTORY_LIMIT, type ChatMessage } from "./lib/ollama";
 import { getDb } from "./lib/db";
-import { addReminder, addTodo, getSetting, setSetting } from "./lib/db-helpers";
+import {
+  addReminder,
+  addTodo,
+  clearConversation,
+  getRecentMessages,
+  getSetting,
+  saveChatTurn,
+  setSetting,
+} from "./lib/db-helpers";
 import { describeDue, parseRemindArgs, parseTodoArgs } from "./lib/commands";
 import { t, useLanguage } from "./lib/i18n";
 import { saveCheckin, startCheckinScheduler, type Mood } from "./lib/checkin";
@@ -22,7 +30,6 @@ import {
   type PomPhase,
 } from "./lib/pomodoroEngine";
 
-const HISTORY_LIMIT = 6;
 const HEIGHT_OPEN = 320;
 const HEIGHT_CHECKIN = 250;
 const HEIGHT_CLOSED = 200;
@@ -66,10 +73,12 @@ function App() {
   const draggingRef = useRef(false);
   const reportHitsRef = useRef<() => void>(() => {});
 
-  // Open the local SQLite database once on startup (Rust already migrated it).
+  // Open the local SQLite database once on startup (Rust already migrated it)
+  // and pick the conversation up where it was left.
   useEffect(() => {
     getDb()
-      .then(() => console.log("Nox DB ready"))
+      .then(() => getRecentMessages(HISTORY_LIMIT))
+      .then(setMessages)
       .catch(console.error);
   }, []);
 
@@ -456,6 +465,16 @@ function App() {
         }
         break;
       }
+      case "clear":
+        try {
+          await clearConversation();
+          setMessages([]);
+          setBubbleText(t("cmd.clear.done"));
+        } catch (err) {
+          console.error(err);
+          setBubbleText(t("cmd.saveFailed"));
+        }
+        break;
       case "dashboard":
         // The pet hides itself while the dashboard is open.
         invoke("show_dashboard").catch(console.error);
@@ -487,27 +506,26 @@ function App() {
     setIsStreaming(true);
     setOpen(false);
 
-    let acc = "";
     await chat(
       text,
       history,
       controller,
-      (chunk) => {
-        acc += chunk;
-        setBubbleText(acc);
-      },
-      () => {
-        // onDone (normal completion or user-stop) — keep whatever streamed.
+      (soFar) => setBubbleText(soFar),
+      (reply, cutOff) => {
+        // Normal completion, user-stop or a timeout — keep whatever streamed.
         setIsStreaming(false);
         setPetState(ambientState());
-        if (acc) {
+        if (reply) {
+          // The marker is only shown, never fed back to the model.
+          setBubbleText(cutOff ? `${reply} ${t("ollama.cutOff")}` : reply);
           setMessages((prev) =>
             [
               ...prev,
               { role: "user", content: text } as ChatMessage,
-              { role: "assistant", content: acc } as ChatMessage,
+              { role: "assistant", content: reply } as ChatMessage,
             ].slice(-HISTORY_LIMIT),
           );
+          saveChatTurn(text, reply).catch(console.error);
         }
         scheduleRevert(); // bubble returns to the greeting after a while
       },

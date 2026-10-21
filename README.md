@@ -90,5 +90,6 @@ themselves.
 |---|---|
 | `/todo <task> [today \| tomorrow \| 25/12]` | Quick-capture a todo (also accepts `hari ini`, `besok`) |
 | `/remind <thing> at 09:00` | Reminder at a time (also `jam 09:00`, `besok jam 09:00`) |
+| `/clear` | Forget the chat history (it is kept across restarts otherwise) |
 | `/dashboard` | Open the dashboard |
 | `/help` | List the commands |

@@ -6,8 +6,23 @@ export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 const DEFAULT_MODEL = "llama3.2:3b";
 
-const HISTORY_LIMIT = 6; // keep last 6 messages (≈3 exchanges) for speed
-const TIMEOUT_MS = 15000;
+/** Messages of context sent with each question (≈3 exchanges), kept short for speed. */
+export const HISTORY_LIMIT = 6;
+// A cold model load (Ollama unloads idle models) can take a while before the
+// first token; after that, a long silence means it is stuck.
+const FIRST_TOKEN_MS = 45000;
+const SILENCE_MS = 15000;
+const KEEP_ALIVE = "30m";
+
+/**
+ * Cut a reply that hit the token limit back to its last full sentence, so it
+ * does not end mid-word. Left alone when there is no sentence end to cut at.
+ */
+export function trimToSentence(text: string): string {
+  const ends = [...text.matchAll(/[.!?…]+["')\]]*(?=\s|$)/g)];
+  const last = ends[ends.length - 1];
+  return last ? text.slice(0, last.index + last[0].length) : text;
+}
 
 type PromptSettings = {
   model: string;
@@ -141,16 +156,21 @@ let nextRequestId = 1;
  *
  * `message` is the new user turn; `history` is the prior conversation (trimmed
  * to the last few turns here). The caller owns `controller` so the UI can abort
- * (stop button); a 15s timeout also aborts it. Results are delivered via
- * callbacks — `onDone` on normal completion or user-stop, `onError` with a
- * bubble-safe message on failure/timeout. Exactly one of them fires.
+ * (stop button). It also times out: FIRST_TOKEN_MS until the first token, then
+ * SILENCE_MS between chunks.
+ *
+ * `onChunk` gets the reply so far. `onDone` gets the final reply on normal
+ * completion, user-stop or a timeout after some text (`cutOff` true); a reply
+ * that hit the token limit is trimmed to its last full sentence. `onError`
+ * gets a bubble-safe message on failure, or a timeout before any text.
+ * Exactly one of `onDone` / `onError` fires.
  */
 export async function chat(
   message: string,
   history: ChatMessage[],
   controller: AbortController,
-  onChunk: (text: string) => void,
-  onDone: () => void,
+  onChunk: (textSoFar: string) => void,
+  onDone: (reply: string, cutOff: boolean) => void,
   onError: (err: string) => void,
 ): Promise<void> {
   const settings = await readPromptSettings();
@@ -164,6 +184,7 @@ export async function chat(
       { role: "user", content: message },
     ],
     stream: true,
+    keep_alive: KEEP_ALIVE, // keep the model loaded between questions
     options: {
       num_predict: 80, // ≈2 sentences
       temperature: 0.7,
@@ -174,6 +195,7 @@ export async function chat(
 
   return new Promise<void>((resolve) => {
     let finished = false;
+    let reply = "";
     const finish = (report: () => void) => {
       if (finished) return;
       finished = true;
@@ -186,16 +208,25 @@ export async function chat(
       invoke("ollama_cancel", { requestId }).catch(console.error);
 
     let timedOut = false;
-    const timeout = setTimeout(() => {
+    const expire = () => {
       timedOut = true;
       controller.abort();
-    }, TIMEOUT_MS);
+    };
+    let timeout = setTimeout(expire, FIRST_TOKEN_MS);
+    // Any sign of life restarts the silence clock.
+    const alive = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(expire, SILENCE_MS);
+    };
 
-    // A user stop finalizes normally so any partial text is kept; a timeout
-    // reports an error instead.
+    // A user stop finalizes normally so any partial text is kept; so does a
+    // timeout once something arrived (marked as cut off). Only a timeout with
+    // nothing to show is an error.
     const onAbort = () => {
       cancel();
-      finish(timedOut ? () => onError(t("ollama.timeout")) : onDone);
+      finish(() =>
+        timedOut && !reply ? onError(t("ollama.timeout")) : onDone(reply, timedOut),
+      );
     };
     controller.signal.addEventListener("abort", onAbort);
 
@@ -219,8 +250,14 @@ export async function chat(
         );
         return;
       }
-      if (data.message?.content && !finished) onChunk(data.message.content);
-      if (data.done) finish(onDone);
+      if (data.message?.content && !finished) {
+        reply += data.message.content;
+        onChunk(reply);
+      }
+      if (data.done) {
+        const final = data.done_reason === "length" ? trimToSentence(reply) : reply;
+        finish(() => onDone(final, false));
+      }
     };
 
     const channel = new Channel<OllamaEvent>();
@@ -228,6 +265,7 @@ export async function chat(
       if (finished) return;
       switch (event.kind) {
         case "line":
+          alive();
           handleLine(event.text);
           break;
         case "httpError":
@@ -243,7 +281,7 @@ export async function chat(
           finish(() => onError(t("ollama.unreachable")));
           break;
         case "end":
-          finish(onDone);
+          finish(() => onDone(reply, false));
           break;
       }
     };
