@@ -44,6 +44,8 @@
   },
   "bundle": {
     "active": true,
+    "publisher": "Bas",
+    "shortDescription": "Nox — desktop pet assistant",
     "targets": "all",
     "icon": [
       "icons/32x32.png",

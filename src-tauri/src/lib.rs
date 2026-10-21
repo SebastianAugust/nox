@@ -142,7 +142,6 @@ async fn close_dashboard(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .manage(DashboardState::default())
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
