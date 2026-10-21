@@ -29,7 +29,7 @@ export async function getSetting(key: string): Promise<string | null> {
 export async function setSetting(key: string, value: string): Promise<void> {
   const db = await getDb();
   await db.execute(
-    'INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime("now"))',
+    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
     [key, value],
   );
 }
@@ -52,13 +52,6 @@ export async function addTodo(todo: {
     ],
   );
   return result.lastInsertId ?? 0;
-}
-
-export async function getTodos(status = "pending"): Promise<any[]> {
-  const db = await getDb();
-  return db.select("SELECT * FROM todos WHERE status = ? ORDER BY due_date ASC", [
-    status,
-  ]);
 }
 
 export type TodoFilter = "pending" | "done" | "all";
@@ -101,14 +94,6 @@ export async function deleteTodo(id: number): Promise<void> {
   await db.execute("DELETE FROM todos WHERE id = ?", [id]);
 }
 
-export async function completeTodo(id: number): Promise<void> {
-  const db = await getDb();
-  await db.execute(
-    'UPDATE todos SET status = "done", updated_at = datetime("now") WHERE id = ?',
-    [id],
-  );
-}
-
 // ── REMINDERS ──
 export async function addReminder(reminder: {
   title: string;
@@ -132,7 +117,7 @@ export async function addReminder(reminder: {
 export async function getPendingReminders(): Promise<any[]> {
   const db = await getDb();
   return db.select(
-    'SELECT * FROM reminders WHERE status = "pending" AND remind_at <= datetime("now") ORDER BY remind_at ASC',
+    "SELECT * FROM reminders WHERE status = 'pending' AND remind_at <= datetime('now') ORDER BY remind_at ASC",
   );
 }
 
@@ -143,11 +128,6 @@ export async function markReminderSent(id: number): Promise<void> {
 }
 
 // ── HABITS ──
-export async function getHabits(): Promise<any[]> {
-  const db = await getDb();
-  return db.select("SELECT * FROM habits WHERE active = 1 ORDER BY name ASC");
-}
-
 export async function addHabit(
   name: string,
   description?: string,
@@ -167,11 +147,6 @@ export async function addHabit(
 export async function deleteHabit(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("UPDATE habits SET active = 0 WHERE id = ?", [id]);
-}
-
-export async function renameHabit(id: number, name: string): Promise<void> {
-  const db = await getDb();
-  await db.execute("UPDATE habits SET name = ? WHERE id = ?", [name, id]);
 }
 
 export async function logHabit(
@@ -198,35 +173,6 @@ export async function getTodayHabitLogs(): Promise<any[]> {
     WHERE h.active = 1
   `,
     [today],
-  );
-}
-
-// ── CLIPBOARD ──
-export async function addClipboardEntry(
-  content: string,
-  appSource?: string,
-): Promise<void> {
-  const db = await getDb();
-  const maxItems = parseInt((await getSetting("clipboard_max_items")) ?? "50");
-  await db.execute(
-    "INSERT INTO clipboard_history (content, app_source) VALUES (?, ?)",
-    [content, appSource ?? null],
-  );
-  // Keep only the last N items.
-  await db.execute(
-    `
-    DELETE FROM clipboard_history
-    WHERE id NOT IN (SELECT id FROM clipboard_history ORDER BY created_at DESC LIMIT ?)
-  `,
-    [maxItems],
-  );
-}
-
-export async function getClipboardHistory(limit = 10): Promise<any[]> {
-  const db = await getDb();
-  return db.select(
-    "SELECT * FROM clipboard_history ORDER BY created_at DESC LIMIT ?",
-    [limit],
   );
 }
 
@@ -275,32 +221,6 @@ export async function getRecentRecaps(limit = 14): Promise<
 > {
   const db = await getDb();
   return db.select("SELECT * FROM daily_recaps ORDER BY date DESC LIMIT ?", [limit]);
-}
-
-// ── NOTION CACHE ──
-export async function cacheNotionAssignments(assignments: any[]): Promise<void> {
-  const db = await getDb();
-  for (const a of assignments) {
-    await db.execute(
-      `
-      INSERT OR REPLACE INTO notion_assignments
-      (notion_id, name, due_date, course, grade, weight, weighted_mark, synced_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `,
-      [a.id, a.name, a.due_date, a.course, a.grade, a.weight, a.weighted_mark],
-    );
-  }
-}
-
-export async function getUpcomingAssignments(days = 7): Promise<any[]> {
-  const db = await getDb();
-  return db.select(`
-    SELECT * FROM notion_assignments
-    WHERE due_date >= date('now')
-    AND due_date <= date('now', '+${days} days')
-    AND status != 'done'
-    ORDER BY due_date ASC
-  `);
 }
 
 /**
@@ -493,22 +413,37 @@ export async function getTodayStats(): Promise<TodayStats> {
   };
 }
 
-/** Next few dated items, todos and cached assignments merged by due date. */
+const MAX_OVERDUE = 2;
+
+/**
+ * Next few dated items, todos, cached assignments and reminders merged by due
+ * date. At most MAX_OVERDUE overdue items lead the list, so a pile of old ones
+ * cannot push everything upcoming out of view.
+ */
 export async function getUpcoming(limit = 5): Promise<
   { title: string; due_date: string; source: string }[]
 > {
   const db = await getDb();
-  return db.select(
-    `SELECT title, due_date, 'todo' AS source FROM todos
-       WHERE status != 'done' AND due_date IS NOT NULL
-     UNION ALL
-     SELECT name AS title, due_date, 'assignment' AS source FROM notion_assignments
-       WHERE status != 'done' AND due_date IS NOT NULL
-     UNION ALL
-     SELECT title, DATE(remind_at, 'localtime') AS due_date, 'reminder' AS source
-       FROM reminders WHERE status = 'pending'
-     ORDER BY due_date ASC
-     LIMIT ?`,
-    [limit],
-  );
+  const items = `
+    SELECT title, DATE(due_date) AS due_date, 'todo' AS source FROM todos
+      WHERE status != 'done' AND due_date IS NOT NULL
+    UNION ALL
+    SELECT name AS title, DATE(due_date) AS due_date, 'assignment' AS source
+      FROM notion_assignments WHERE status != 'done' AND due_date IS NOT NULL
+    UNION ALL
+    SELECT title, DATE(remind_at, 'localtime') AS due_date, 'reminder' AS source
+      FROM reminders WHERE status = 'pending'`;
+  type Row = { title: string; due_date: string; source: string };
+  const today = todayLocal();
+  const [overdue, upcoming] = await Promise.all([
+    db.select<Row[]>(
+      `SELECT * FROM (${items}) WHERE due_date < ? ORDER BY due_date DESC LIMIT ?`,
+      [today, MAX_OVERDUE],
+    ),
+    db.select<Row[]>(
+      `SELECT * FROM (${items}) WHERE due_date >= ? ORDER BY due_date ASC LIMIT ?`,
+      [today, limit],
+    ),
+  ]);
+  return [...overdue.reverse(), ...upcoming].slice(0, limit);
 }

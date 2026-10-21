@@ -6,14 +6,14 @@ import type { I18nKey } from "./i18n";
 const POLL_MS = 30 * 60 * 1000; // 30 minutes
 const DEFAULT_INTERVAL_MINUTES = 180;
 
-export type Mood = { key: string; labelKey: I18nKey; emoji: string; energy: number };
+export type Mood = { key: string; labelKey: I18nKey; icon: string; energy: number };
 
 /** The options offered in the check-in bubble, lowest energy last. */
 export const MOODS: Mood[] = [
-  { key: "good", labelKey: "mood.good", emoji: "😊", energy: 5 },
-  { key: "ok", labelKey: "mood.ok", emoji: "😐", energy: 3 },
-  { key: "tired", labelKey: "mood.tired", emoji: "😔", energy: 1 },
-  { key: "hungry", labelKey: "mood.hungry", emoji: "🍽", energy: 2 },
+  { key: "good", labelKey: "mood.good", icon: "ti-mood-smile", energy: 5 },
+  { key: "ok", labelKey: "mood.ok", icon: "ti-mood-neutral", energy: 3 },
+  { key: "tired", labelKey: "mood.tired", icon: "ti-mood-sad", energy: 1 },
+  { key: "hungry", labelKey: "mood.hungry", icon: "ti-mood-tongue", energy: 2 },
 ];
 
 /**

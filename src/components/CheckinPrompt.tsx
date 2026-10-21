@@ -68,7 +68,7 @@ export default function CheckinPrompt({ onPick, onDismiss }: Props) {
             fontFamily: "inherit",
           }}
         >
-          <div style={{ fontSize: 13 }}>{m.emoji}</div>
+          <i className={`ti ${m.icon}`} aria-hidden="true" style={{ fontSize: 15, display: "block" }} />
           {t(m.labelKey)}
         </button>
       ))}

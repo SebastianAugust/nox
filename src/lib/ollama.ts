@@ -116,6 +116,14 @@ ${examples}`;
 }
 
 /**
+ * Ollama answers a missing model with e.g. `model "x" not found, try pulling
+ * it first`; only that deserves the "ollama pull" hint.
+ */
+function modelMissing(errorText: string): boolean {
+  return /model/i.test(errorText) && /not found|pull/i.test(errorText);
+}
+
+/**
  * Stream a chat completion from Ollama.
  *
  * `message` is the new user turn; `history` is the prior conversation (trimmed
@@ -168,9 +176,9 @@ export async function chat(
       const body = await response.text().catch(() => "");
       clearTimeout(timeout);
       onError(
-        /model/i.test(body)
+        modelMissing(body)
           ? t("ollama.modelMissing", { model })
-          : t("ollama.failed"),
+          : t("ollama.error", { status: response.status }),
       );
       return;
     }
@@ -206,9 +214,9 @@ export async function chat(
         if (data.error) {
           clearTimeout(timeout);
               onError(
-            /model/i.test(String(data.error))
+            modelMissing(String(data.error))
               ? t("ollama.modelMissing", { model })
-              : t("ollama.failed"),
+              : t("ollama.error", { status: response.status }),
           );
           return;
         }

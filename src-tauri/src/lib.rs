@@ -56,16 +56,6 @@ fn reveal_window(window: &WebviewWindow) {
     position_window(window);
 }
 
-#[tauri::command]
-fn hide_window(window: WebviewWindow) {
-    let _ = window.hide();
-}
-
-#[tauri::command]
-fn show_window(window: WebviewWindow) {
-    reveal_window(&window);
-}
-
 /// Resize the window to a new height, keeping its bottom and left edges fixed
 /// (the pet is bottom-anchored) so a dragged position is preserved instead of
 /// snapping back to the bottom-right dock.
@@ -228,8 +218,6 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            hide_window,
-            show_window,
             resize_window,
             show_dashboard,
             close_dashboard
