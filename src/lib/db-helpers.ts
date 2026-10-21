@@ -122,10 +122,37 @@ export async function getPendingReminders(): Promise<any[]> {
   );
 }
 
-/** Mark a reminder as delivered so it is not shown again. */
-export async function markReminderSent(id: number): Promise<void> {
+/** Mark reminders as delivered so they are not shown again. */
+export async function markRemindersSent(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
   const db = await getDb();
-  await db.execute("UPDATE reminders SET status = 'sent' WHERE id = ?", [id]);
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+  await db.execute(
+    `UPDATE reminders SET status = 'sent' WHERE id IN (${placeholders})`,
+    ids,
+  );
+}
+
+export type ReminderRow = {
+  id: number;
+  title: string;
+  remind_at: string;
+  status: string;
+};
+
+/** Everything still to come, plus what came due in the last day. */
+export async function getReminders(): Promise<ReminderRow[]> {
+  const db = await getDb();
+  return db.select(
+    `SELECT id, title, remind_at, status FROM reminders
+     WHERE status = 'pending' OR remind_at >= datetime('now', '-1 day')
+     ORDER BY remind_at ASC`,
+  );
+}
+
+export async function deleteReminder(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM reminders WHERE id = ?", [id]);
 }
 
 // ── HABITS ──

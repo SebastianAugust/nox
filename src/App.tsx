@@ -198,14 +198,16 @@ function App() {
   // Reminders saved by /remind come back here when their time arrives.
   useEffect(
     () =>
-      startReminderPoller((titles) => {
-        void deliver({
+      startReminderPoller((titles, grouped) =>
+        deliver({
           kind: "reminder",
-          text: t(titles.length === 1 ? "pet.reminder" : "pet.reminders", {
-            titles: titles.join(" · "),
-          }),
-        });
-      }),
+          text: grouped
+            ? t("pet.remindersMissed", { n: titles.length })
+            : t(titles.length === 1 ? "pet.reminder" : "pet.reminders", {
+                titles: titles.join(" · "),
+              }),
+        }),
+      ),
     [],
   );
 

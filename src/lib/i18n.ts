@@ -22,6 +22,7 @@ const en = {
   "pet.recap": "Day recap: {summary}. Good work today, {name}!",
   "pet.reminder": "Reminder: {titles}",
   "pet.reminders": "Reminders: {titles}",
+  "pet.remindersMissed": "You missed {n} reminders. They're listed in the dashboard under Todos.",
   "pet.checkin.tired": "Rest up, {name}. Tasks can wait.",
   "pet.checkin.hungry": "Go eat first. I'll be here.",
   "pet.checkin.other": "Got it. Keep going.",
@@ -129,6 +130,10 @@ const en = {
   "todos.reminder": "reminder · ",
   "todos.toggle": "Toggle",
   "todos.delete": "Delete todo",
+  "reminders.title": "reminders",
+  "reminders.empty": "No reminders. Set one from the pet: /remind standup at 09:00",
+  "reminders.sent": "sent",
+  "reminders.delete": "Delete reminder",
 
   // ── Recap ──
   "common.loading": "Loading…",
@@ -179,6 +184,7 @@ const id: Record<I18nKey, string> = {
   "pet.recap": "Rekap hari ini: {summary}. Kerja bagus, {name}!",
   "pet.reminder": "Pengingat: {titles}",
   "pet.reminders": "Pengingat: {titles}",
+  "pet.remindersMissed": "Kamu melewatkan {n} pengingat. Daftarnya ada di dashboard, bagian Tugas.",
   "pet.checkin.tired": "Istirahat dulu, {name}. Tugas bisa nunggu.",
   "pet.checkin.hungry": "Makan dulu sana. Aku tunggu di sini.",
   "pet.checkin.other": "Oke. Lanjut terus.",
@@ -280,6 +286,10 @@ const id: Record<I18nKey, string> = {
   "todos.reminder": "pengingat · ",
   "todos.toggle": "Centang",
   "todos.delete": "Hapus tugas",
+  "reminders.title": "pengingat",
+  "reminders.empty": "Belum ada pengingat. Pasang dari Nox: /remind standup jam 09:00",
+  "reminders.sent": "terkirim",
+  "reminders.delete": "Hapus pengingat",
 
   "common.loading": "Memuat…",
   "recap.empty": "Belum ada rekap. Yang pertama muncul di jam rekapmu.",
