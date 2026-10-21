@@ -42,6 +42,11 @@
       "csp": null
     }
   },
+  "plugins": {
+    "sql": {
+      "preload": ["sqlite:nox.db"]
+    }
+  },
   "bundle": {
     "active": true,
     "publisher": "Bas",

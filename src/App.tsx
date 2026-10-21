@@ -62,7 +62,7 @@ function App() {
   const flashTimerRef = useRef<number | null>(null);
   const lastActivityRef = useRef(Date.now());
 
-  // Open (and migrate) the local SQLite database once on startup.
+  // Open the local SQLite database once on startup (Rust already migrated it).
   useEffect(() => {
     getDb()
       .then(() => console.log("Nox DB ready"))

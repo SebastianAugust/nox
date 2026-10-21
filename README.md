@@ -13,7 +13,7 @@ Everything runs and is stored locally; the only network call goes to Ollama on
 - **`dashboard`**: a regular dark window (`src/Dashboard.tsx`) for habits, todos, pomodoro, recap and settings. It is a view plus remote control. The pet is paused while it is open.
 - Windows talk through Tauri events (`pomodoro:*`, `settings:changed`) and the shared SQLite database.
 - **Rust** (`src-tauri/src/lib.rs`) only does window docking/resizing, the tray menu and dashboard open/close.
-- **SQLite** through `tauri-plugin-sql`. The schema and default settings live in `src/lib/db.ts`, queries in `src/lib/db-helpers.ts`.
+- **SQLite** through `tauri-plugin-sql`. The schema and default settings are numbered migrations in `src-tauri/migrations/`, run once by Rust at startup; queries live in `src/lib/db-helpers.ts`.
 - **Chat**: `src/lib/ollama.ts` streams from Ollama, with a system prompt built from settings on every message.
 - **UI strings**: `src/lib/i18n.ts` (English / Indonesian, chosen by the `language` setting).
 
@@ -70,6 +70,19 @@ The database is `nox.db` in the app config directory:
 ```
 
 It sits next to `nox.db-wal` / `nox.db-shm` (WAL mode). Delete all three to start fresh. The tables and default settings are recreated on the next launch.
+
+### Schema changes
+
+The schema is versioned with `tauri-plugin-sql` migrations (sqlx records them in
+the `_sqlx_migrations` table). To change it:
+
+1. Add `src-tauri/migrations/000N_<what>.sql` with the next number.
+2. Register it in `migrations()` in `src-tauri/src/lib.rs`.
+
+Never edit a migration that has already shipped: sqlx stores each one's
+checksum and refuses to start when it changes. Foreign keys are not enforced
+consistently (the pragma is per connection), so helpers delete dependent rows
+themselves.
 
 ## Slash commands (pet chat)
 

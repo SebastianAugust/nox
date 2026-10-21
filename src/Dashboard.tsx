@@ -1533,8 +1533,8 @@ const TEXT_SETTINGS = [
   { key: "user_timezone", label: "set.timezone" },
 ] as const;
 
-// Daily briefing (toggle + time) is hidden until it is wired in Phase 2; its
-// settings rows stay seeded.
+// Daily briefing (toggle + time) is hidden until it is wired in Phase 2, which
+// seeds its settings in a new migration.
 const FEATURE_SETTINGS = [
   { key: "body_checkin_enabled", label: "set.checkin" },
   { key: "dnd_during_pomodoro", label: "set.dnd" },

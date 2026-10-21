@@ -1,6 +1,7 @@
 mod ollama;
 
 use std::sync::Mutex;
+use tauri_plugin_sql::{Migration, MigrationKind};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -140,12 +141,28 @@ async fn close_dashboard(app: AppHandle) {
     hide_dashboard(&app);
 }
 
+fn migrations() -> Vec<Migration> {
+    vec![Migration {
+        version: 1,
+        description: "init",
+        sql: include_str!("../migrations/0001_init.sql"),
+        kind: MigrationKind::Up,
+    }]
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(DashboardState::default())
         .manage(ollama::OllamaRequests::default())
-        .plugin(tauri_plugin_sql::Builder::default().build())
+        // Migrations run once at startup for the preloaded database (see
+        // `plugins.sql.preload` in tauri.conf.json), before any window queries.
+        // Never edit a released migration; add the next number instead.
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations("sqlite:nox.db", migrations())
+                .build(),
+        )
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 position_window(&window);

@@ -89,7 +89,8 @@ export async function setTodoStatus(id: number, status: string): Promise<void> {
 
 export async function deleteTodo(id: number): Promise<void> {
   const db = await getDb();
-  // Detach any reminder first: reminders.todo_id is a FK and foreign_keys=ON.
+  // Detach any reminder first: reminders.todo_id is a FK. foreign_keys is a
+  // per-connection pragma, so never rely on it (or on cascades) either way.
   await db.execute("UPDATE reminders SET todo_id = NULL WHERE todo_id = ?", [id]);
   await db.execute("DELETE FROM todos WHERE id = ?", [id]);
 }
@@ -142,7 +143,8 @@ export async function addHabit(
 
 /**
  * Retire a habit. Soft delete (active = 0) so its history stays intact and
- * past recaps/streaks keep making sense.
+ * past recaps/streaks keep making sense. A hard delete would have to remove
+ * its habit_logs rows itself first: there are no FK cascades.
  */
 export async function deleteHabit(id: number): Promise<void> {
   const db = await getDb();
