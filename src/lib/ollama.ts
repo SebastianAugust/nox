@@ -1,4 +1,5 @@
 import { getSettings } from "./db";
+import { t } from "./i18n";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -135,7 +136,7 @@ export async function chat(
   const timeout = setTimeout(() => {
     timedOut = true;
     controller.abort();
-    onError("Taking too long... try a shorter question.");
+    onError(t("ollama.timeout"));
   }, TIMEOUT_MS);
 
   const settings = await readPromptSettings();
@@ -168,8 +169,8 @@ export async function chat(
       clearTimeout(timeout);
       onError(
         /model/i.test(body)
-          ? `Model not loaded. Run \`ollama pull ${model}\`.`
-          : "Something went wrong. Try again.",
+          ? t("ollama.modelMissing", { model })
+          : t("ollama.failed"),
       );
       return;
     }
@@ -177,7 +178,7 @@ export async function chat(
     const reader = response.body?.getReader();
     if (!reader) {
       clearTimeout(timeout);
-      onError("Something went wrong. Try again.");
+      onError(t("ollama.failed"));
       return;
     }
 
@@ -206,8 +207,8 @@ export async function chat(
           clearTimeout(timeout);
               onError(
             /model/i.test(String(data.error))
-              ? `Model not loaded. Run \`ollama pull ${model}\`.`
-              : "Something went wrong. Try again.",
+              ? t("ollama.modelMissing", { model })
+              : t("ollama.failed"),
           );
           return;
         }
@@ -231,6 +232,6 @@ export async function chat(
       return;
     }
     // fetch() rejects on connection refused / network failure.
-    onError("Can't reach Ollama. Is it running?");
+    onError(t("ollama.unreachable"));
   }
 }

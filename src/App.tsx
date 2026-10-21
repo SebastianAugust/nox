@@ -9,6 +9,7 @@ import { chat, type ChatMessage } from "./lib/ollama";
 import { getDb } from "./lib/db";
 import { addReminder, addTodo, getSetting } from "./lib/db-helpers";
 import { describeDue, parseRemindArgs, parseTodoArgs } from "./lib/commands";
+import { t, useLanguage } from "./lib/i18n";
 import { saveCheckin, startCheckinScheduler, type Mood } from "./lib/checkin";
 import { recordInteraction, startFrictionDetector } from "./lib/friction";
 import { startRecapScheduler } from "./lib/recap";
@@ -24,7 +25,6 @@ const HISTORY_LIMIT = 6;
 const HEIGHT_OPEN = 320;
 const HEIGHT_CHECKIN = 250;
 const HEIGHT_CLOSED = 200;
-const DEFAULT_TEXT = "Hey! I'm Nox.";
 const REVERT_MS = 10000; // how long an answer lingers before the bubble resets
 const FLASH_MS = 4000; // how long a one-off expression (excited/happy) holds
 
@@ -38,6 +38,11 @@ function isNight(d = new Date()) {
   return h >= NIGHT_START_HOUR || h < NIGHT_END_HOUR;
 }
 
+/** The user's name from settings, for bubbles that address them. */
+async function userName(): Promise<string> {
+  return (await getSetting("user_name"))?.trim() || "Bas";
+}
+
 /** The resting face: focused while a pomodoro runs, otherwise idle. */
 function ambientState(): PetState {
   return getPomodoroSnapshot().phase === "focus" ? "thinking" : "idle";
@@ -45,7 +50,9 @@ function ambientState(): PetState {
 
 function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [bubbleText, setBubbleText] = useState(DEFAULT_TEXT);
+  useLanguage(); // re-render every string when the language setting changes
+  // null = the greeting, rendered at display time so it follows the language.
+  const [bubbleText, setBubbleText] = useState<string | null>(null);
   const [petState, setPetState] = useState<PetState>("idle");
   const [chatOpen, setChatOpen] = useState(false);
   const [showCheckin, setShowCheckin] = useState(false);
@@ -73,7 +80,7 @@ function App() {
   const scheduleRevert = () => {
     clearRevert();
     revertTimerRef.current = window.setTimeout(() => {
-      setBubbleText(DEFAULT_TEXT);
+      setBubbleText(null);
       revertTimerRef.current = null;
     }, REVERT_MS);
   };
@@ -112,7 +119,7 @@ function App() {
       touch();
       clearRevert();
       setShowCheckin(false);
-      setBubbleText(DEFAULT_TEXT);
+      setBubbleText(null);
     }
   };
 
@@ -128,7 +135,7 @@ function App() {
   useEffect(
     () =>
       startCheckinScheduler(() => {
-        setBubbleText("How's the body doing?");
+        setBubbleText(t("pet.checkinAsk"));
         setPetState("alert");
         setShowCheckin(true);
       }),
@@ -138,11 +145,11 @@ function App() {
   useEffect(
     () =>
       startFrictionDetector(async () => {
-        const name = (await getSetting("user_name")) ?? "Bas";
+        const name = await userName();
         // setOpen(true) resets the bubble, so the nudge is written after it.
         setOpen(true);
         setPetState("alert");
-        setBubbleText(`Quiet for a while. What are you working on, ${name}?`);
+        setBubbleText(t("pet.friction", { name }));
       }),
     [],
   );
@@ -150,10 +157,10 @@ function App() {
   useEffect(
     () =>
       startRecapScheduler(async (recap) => {
-        const name = (await getSetting("user_name")) ?? "Bas";
+        const name = await userName();
         clearRevert();
         flashState("happy", 15000);
-        setBubbleText(`Day recap: ${recap.summary}. Good work today, ${name}!`);
+        setBubbleText(t("pet.recap", { summary: recap.summary, name }));
       }),
     [flashState],
   );
@@ -165,9 +172,9 @@ function App() {
         clearRevert();
         flashState("alert", 20000);
         setBubbleText(
-          titles.length === 1
-            ? `Reminder: ${titles[0]}`
-            : `Reminders: ${titles.join(" · ")}`,
+          t(titles.length === 1 ? "pet.reminder" : "pet.reminders", {
+            titles: titles.join(" · "),
+          }),
         );
       }),
     [flashState],
@@ -205,13 +212,13 @@ function App() {
       prev = phase;
       if (phase === "focus") {
         setPetState("thinking");
-        setBubbleText("Focus mode. Timer's running.");
+        setBubbleText(t("pet.focus"));
       } else if (phase === "break") {
         flashState("excited", 15000);
-        setBubbleText("Break time. Get up, stretch.");
+        setBubbleText(t("pet.break"));
       } else {
         setPetState("idle");
-        setBubbleText(DEFAULT_TEXT);
+        setBubbleText(null);
       }
     });
   }, [flashState]);
@@ -264,13 +271,13 @@ function App() {
       console.error(err);
     }
     flashState(mood.energy >= 4 ? "excited" : "happy");
-    const name = (await getSetting("user_name").catch(() => null)) ?? "Bas";
+    const name = await userName().catch(() => "Bas");
     setBubbleText(
       mood.key === "tired"
-        ? `Rest up, ${name}. Tasks can wait.`
+        ? t("pet.checkin.tired", { name })
         : mood.key === "hungry"
-          ? "Go eat first — I'll be here."
-          : "Got it. Keep going.",
+          ? t("pet.checkin.hungry")
+          : t("pet.checkin.other"),
     );
     scheduleRevert();
   };
@@ -279,7 +286,7 @@ function App() {
     touch();
     setShowCheckin(false);
     setPetState(ambientState());
-    setBubbleText(DEFAULT_TEXT);
+    setBubbleText(null);
   };
 
   /**
@@ -296,12 +303,12 @@ function App() {
     switch (command) {
       case "todo": {
         if (!arg) {
-          setBubbleText('Needs something to save — try "/todo buy coffee besok".');
+          setBubbleText(t("cmd.todo.empty"));
           break;
         }
         const { title, due_date } = parseTodoArgs(arg);
         if (!title) {
-          setBubbleText("That's only a date — what should I call it?");
+          setBubbleText(t("cmd.todo.onlyDate"));
           break;
         }
         try {
@@ -309,18 +316,24 @@ function App() {
           flashState("excited");
           setBubbleText(
             due_date
-              ? `Added: "${title}" · due ${describeDue(due_date)}.`
-              : `Added: "${title}" to your todos.`,
+              ? t("cmd.todo.addedDue", {
+                  title,
+                  due: describeDue(due_date, {
+                    today: t("date.today"),
+                    tomorrow: t("date.tomorrow"),
+                  }),
+                })
+              : t("cmd.todo.added", { title }),
           );
         } catch (err) {
           console.error(err);
-          setBubbleText("Couldn't save that. Check the database.");
+          setBubbleText(t("cmd.saveFailed"));
         }
         break;
       }
       case "remind": {
         if (!arg) {
-          setBubbleText('Needs something to save — try "/remind standup jam 09:00".');
+          setBubbleText(t("cmd.remind.empty"));
           break;
         }
         const parsed = parseRemindArgs(arg);
@@ -328,16 +341,23 @@ function App() {
           if (parsed.remind_at) {
             await addReminder({ title: parsed.title, remind_at: parsed.remind_at });
             flashState("excited");
-            setBubbleText(`Reminder set: "${parsed.title}" · ${parsed.when}.`);
+            setBubbleText(
+              t("cmd.remind.set", {
+                title: parsed.title,
+                when: parsed.tomorrow
+                  ? t("cmd.remind.tomorrowAt", { clock: parsed.clock ?? "" })
+                  : (parsed.clock ?? ""),
+              }),
+            );
           } else {
             // No time in there — keep it rather than lose it, as a todo.
             await addTodo({ title: parsed.title, notes: "reminder", context: "personal" });
             flashState("excited");
-            setBubbleText(`Saved "${parsed.title}" as a todo. Add "jam 09:00" for a time.`);
+            setBubbleText(t("cmd.remind.asTodo", { title: parsed.title }));
           }
         } catch (err) {
           console.error(err);
-          setBubbleText("Couldn't save that. Check the database.");
+          setBubbleText(t("cmd.saveFailed"));
         }
         break;
       }
@@ -346,12 +366,10 @@ function App() {
         invoke("show_dashboard").catch(console.error);
         break;
       case "help":
-        setBubbleText(
-          "/todo <task> [besok | hari ini | 25/12] · /remind <thing> jam 09:00 · /dashboard",
-        );
+        setBubbleText(t("cmd.help"));
         break;
       default:
-        setBubbleText(`No such command. Try /todo, /remind, /dashboard or /help.`);
+        setBubbleText(t("cmd.unknown"));
     }
 
     setOpen(false);
@@ -370,7 +388,7 @@ function App() {
     controllerRef.current = controller;
 
     setPetState("thinking");
-    setBubbleText("..."); // shown until the first token arrives
+    setBubbleText(t("pet.thinking")); // shown until the first token arrives
     setIsStreaming(true);
     setOpen(false);
 
@@ -424,7 +442,7 @@ function App() {
         overflow: "hidden",
       }}
     >
-      <Bubble text={bubbleText} isStreaming={isStreaming} onStop={handleStop} />
+      <Bubble text={bubbleText ?? t("pet.greeting")} isStreaming={isStreaming} onStop={handleStop} />
       {chatOpen && (
         <ChatInput
           onSend={handleSend}

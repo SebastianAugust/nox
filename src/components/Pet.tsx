@@ -1,4 +1,5 @@
 import toothless from "../assets/toothless.png";
+import { t } from "../lib/i18n";
 
 export type PetState =
   | "idle"
@@ -51,7 +52,7 @@ export default function Pet({ onClick, onMouseDown, state = "idle" }: PetProps) 
     <div
       onClick={onClick}
       onMouseDown={onMouseDown}
-      title="Click to chat with Nox"
+      title={t("pet.title")}
       className={`pet-body ${BODY_CLASS[state]}`}
       style={{
         position: "relative",

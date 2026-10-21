@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getSettings } from "./lib/db";
 import {
@@ -24,6 +25,7 @@ import {
   type TodoFilter,
 } from "./lib/db-helpers";
 import Pomodoro from "./components/Pomodoro";
+import { locale, t, useLanguage, type I18nKey } from "./lib/i18n";
 
 type Page =
   | "home"
@@ -37,14 +39,14 @@ type Page =
 // Single source of truth for the sidebar: its order is also what the 1-7
 // number-key shortcuts select, so the two can never drift apart.
 const NAV_ITEMS = [
-  { id: "home", icon: "ti-home", label: "Overview" },
-  { id: "habits", icon: "ti-checklist", label: "Habits" },
-  { id: "pomodoro", icon: "ti-clock", label: "Pomodoro" },
-  { id: "todos", icon: "ti-list-check", label: "Todos" },
-  { id: "recap", icon: "ti-history", label: "Recap" },
-  { id: "integrations", icon: "ti-plug", label: "Integrations" },
-  { id: "settings", icon: "ti-settings", label: "Settings" },
-] as const satisfies readonly { id: Page; icon: string; label: string }[];
+  { id: "home", icon: "ti-home", label: "nav.home" },
+  { id: "habits", icon: "ti-checklist", label: "nav.habits" },
+  { id: "pomodoro", icon: "ti-clock", label: "nav.pomodoro" },
+  { id: "todos", icon: "ti-list-check", label: "nav.todos" },
+  { id: "recap", icon: "ti-history", label: "nav.recap" },
+  { id: "integrations", icon: "ti-plug", label: "nav.integrations" },
+  { id: "settings", icon: "ti-settings", label: "nav.settings" },
+] as const satisfies readonly { id: Page; icon: string; label: I18nKey }[];
 
 // Shared style fragments
 const sectionLabel = {
@@ -78,6 +80,7 @@ const emptyText = {
 export function Dashboard() {
   const [page, setPage] = useState<Page>("home");
   const [userName, setUserName] = useState("");
+  useLanguage(); // re-render every string when the language setting changes
 
   const handleClose = () => {
     invoke("close_dashboard").catch(console.error);
@@ -208,7 +211,7 @@ function TitleBar({
       <div style={{ display: "flex", gap: 6 }}>
         <TitleBarButton
           onClick={() => getCurrentWindow().minimize().catch(console.error)}
-          title="Minimize"
+          title={t("dash.minimize")}
           base="rgba(255,255,255,0.08)"
           hover="rgba(255,255,255,0.16)"
           color="rgba(255,255,255,0.5)"
@@ -217,7 +220,7 @@ function TitleBar({
         </TitleBarButton>
         <TitleBarButton
           onClick={onClose}
-          title="Close"
+          title={t("dash.close")}
           base="rgba(239,68,68,0.15)"
           hover="rgba(239,68,68,0.3)"
           color="rgba(239,68,68,0.85)"
@@ -291,10 +294,10 @@ function Sidebar({
             />
             <button
               onClick={() => onNavigate(item.id)}
-              title={`${item.label} (${i + 1})`}
+              title={`${t(item.label)} (${i + 1})`}
               onMouseEnter={(e) =>
                 setTooltip({
-                  label: `${item.label} · ${i + 1}`,
+                  label: `${t(item.label)} · ${i + 1}`,
                   top: e.currentTarget.getBoundingClientRect().top + 21,
                 })
               }
@@ -347,24 +350,15 @@ function Sidebar({
 }
 
 function Main({ page }: { page: Page }) {
-  const titles: Record<Page, { title: string; sub: string }> = {
-    home: {
-      title: "Overview",
-      sub: new Date().toLocaleDateString("id-ID", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-      }),
-    },
-    habits: { title: "Habits", sub: "Kebiasaan harian" },
-    pomodoro: { title: "Pomodoro", sub: "Fokus tanpa gangguan" },
-    todos: { title: "Todos", sub: "Semua tugas" },
-    recap: { title: "Recap", sub: "Riwayat harian" },
-    integrations: { title: "Integrations", sub: "Kelola koneksi" },
-    settings: { title: "Settings", sub: "Preferensi Nox" },
-  };
-
-  const { title, sub } = titles[page];
+  const title = t(`nav.${page}`);
+  const sub =
+    page === "home"
+      ? new Date().toLocaleDateString(locale(), {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        })
+      : t(`sub.${page}`);
 
   return (
     <div
@@ -420,12 +414,12 @@ function Main({ page }: { page: Page }) {
   );
 }
 
-/** "today" / "besok" / a short date, for due dates that are plain YYYY-MM-DD. */
+/** "today" / "tomorrow" / a short date, for due dates that are plain YYYY-MM-DD. */
 function formatDue(due: string): { text: string; color: string } {
   const date = due.slice(0, 10);
   const today = todayLocal();
-  if (date < today) return { text: "overdue", color: "#f87171" };
-  if (date === today) return { text: "today", color: "#f59e0b" };
+  if (date < today) return { text: t("date.overdue"), color: "#f87171" };
+  if (date === today) return { text: t("date.today"), color: "#f59e0b" };
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -433,11 +427,11 @@ function formatDue(due: string): { text: string; color: string } {
   const tomorrowStr = `${tomorrow.getFullYear()}-${p(tomorrow.getMonth() + 1)}-${p(
     tomorrow.getDate(),
   )}`;
-  if (date === tomorrowStr) return { text: "besok", color: "#00e5a0" };
+  if (date === tomorrowStr) return { text: t("date.tomorrow"), color: "#00e5a0" };
 
   const [y, m, d] = date.split("-").map(Number);
   return {
-    text: new Date(y, m - 1, d).toLocaleDateString("id-ID", {
+    text: new Date(y, m - 1, d).toLocaleDateString(locale(), {
       day: "numeric",
       month: "short",
     }),
@@ -465,16 +459,16 @@ function PageHome() {
   }, []);
 
   const tiles = [
-    { val: String(stats?.tasks ?? 0), label: "tasks today" },
-    { val: String(stats?.pomodoros ?? 0), label: "pomodoros" },
+    { val: String(stats?.tasks ?? 0), label: t("home.tasksToday") },
+    { val: String(stats?.pomodoros ?? 0), label: t("home.pomodoros") },
     {
       val: `${stats?.habitsDone ?? 0}/${stats?.habitsTotal ?? 0}`,
-      label: "habits done",
+      label: t("home.habitsDone"),
       accent: true,
     },
     {
       val: String(stats?.deadlines ?? 0),
-      label: stats?.deadlines === 1 ? "deadline today" : "deadlines today",
+      label: t(stats?.deadlines === 1 ? "home.deadlineToday" : "home.deadlinesToday"),
     },
   ];
 
@@ -523,13 +517,13 @@ function PageHome() {
               marginBottom: 2,
             }}
           >
-            Nox · idle
+            {t("home.petState")}
           </div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
-            Paused while dashboard is open
+            {t("home.paused")}
           </div>
         </div>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>paused</div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>{t("home.pausedTag")}</div>
       </div>
 
       {/* Stats grid */}
@@ -553,10 +547,10 @@ function PageHome() {
 
       {/* Upcoming */}
       <div>
-        <div style={sectionLabel}>upcoming</div>
+        <div style={sectionLabel}>{t("home.upcoming")}</div>
         <div style={card}>
           {upcoming.length === 0 && (
-            <div style={emptyText}>Nothing scheduled. Capture one with /todo.</div>
+            <div style={emptyText}>{t("home.nothing")}</div>
           )}
           {upcoming.map((item, i, arr) => {
             const due = formatDue(item.due_date);
@@ -647,10 +641,10 @@ function PageHabits() {
   return (
     <>
       <div>
-        <div style={sectionLabel}>today</div>
+        <div style={sectionLabel}>{t("habits.today")}</div>
         <div style={card}>
           {habits.length === 0 && !adding && (
-            <div style={emptyText}>No habits yet. Add one below.</div>
+            <div style={emptyText}>{t("habits.empty")}</div>
           )}
           {habits.map((h, i) => (
             <HabitItem
@@ -692,7 +686,7 @@ function PageHabits() {
                     setAdding(false);
                   }
                 }}
-                placeholder="New habit..."
+                placeholder={t("habits.new")}
                 style={{
                   flex: 1,
                   background: "transparent",
@@ -713,7 +707,7 @@ function PageHabits() {
           <div style={{ fontSize: 22, fontWeight: 500, color: "#00e5a0", marginBottom: 3 }}>
             {streaks.current}
           </div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>day streak</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{t("habits.streak")}</div>
         </div>
         <div style={statCard}>
           <div
@@ -726,7 +720,7 @@ function PageHabits() {
           >
             {streaks.best}
           </div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>best streak</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{t("habits.best")}</div>
         </div>
       </div>
 
@@ -746,7 +740,7 @@ function PageHabits() {
           fontFamily: "inherit",
         }}
       >
-        + add habit
+        {t("habits.add")}
       </button>
     </>
   );
@@ -789,7 +783,7 @@ function HabitItem({
     >
       <div
         onClick={onToggle}
-        title="Toggle"
+        title={t("habits.toggle")}
         style={{
           width: 16,
           height: 16,
@@ -837,12 +831,12 @@ function HabitItem({
             fontFamily: "inherit",
           }}
         >
-          delete?
+          {t("habits.confirmDelete")}
         </button>
       ) : (
         <button
           onClick={() => setConfirming(true)}
-          title="Delete habit"
+          title={t("habits.delete")}
           style={{
             background: "none",
             border: "none",
@@ -872,7 +866,7 @@ function PagePomodoro() {
   useEffect(load, [load]);
 
   const formatClock = (stamp: string) =>
-    new Date(stamp.replace(" ", "T") + "Z").toLocaleTimeString("id-ID", {
+    new Date(stamp.replace(" ", "T") + "Z").toLocaleTimeString(locale(), {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -884,10 +878,10 @@ function PagePomodoro() {
       </div>
 
       <div>
-        <div style={sectionLabel}>today's sessions</div>
+        <div style={sectionLabel}>{t("pom.todaySessions")}</div>
         <div style={card}>
           {sessions.length === 0 && (
-            <div style={emptyText}>No sessions yet today.</div>
+            <div style={emptyText}>{t("pom.none")}</div>
           )}
           {sessions.map((s, i, arr) => (
             <div
@@ -910,7 +904,7 @@ function PagePomodoro() {
                 }}
               />
               <span style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", flex: 1 }}>
-                {s.completed ? "Completed" : "Stopped early"} · {s.duration_minutes} min
+                {t(s.completed ? "pom.completed" : "pom.stopped", { min: s.duration_minutes })}
               </span>
               <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
                 {formatClock(s.started_at)}
@@ -925,10 +919,10 @@ function PagePomodoro() {
 
 type TodoRow = Awaited<ReturnType<typeof getTodosFiltered>>[number];
 
-const FILTERS: { id: TodoFilter; label: string }[] = [
-  { id: "pending", label: "Active" },
-  { id: "done", label: "Done" },
-  { id: "all", label: "All" },
+const FILTERS: { id: TodoFilter; label: I18nKey }[] = [
+  { id: "pending", label: "todos.active" },
+  { id: "done", label: "todos.done" },
+  { id: "all", label: "todos.all" },
 ];
 
 function PageTodos() {
@@ -989,7 +983,7 @@ function PageTodos() {
                 color: active ? "#00e5a0" : "rgba(255,255,255,0.4)",
               }}
             >
-              {f.label}
+              {t(f.label)}
             </button>
           );
         })}
@@ -999,7 +993,7 @@ function PageTodos() {
       <div style={{ ...card, padding: "6px 14px" }}>
         {todos.length === 0 && (
           <div style={{ ...emptyText, textAlign: "center", padding: "18px 0" }}>
-            {filter === "pending" ? "No active todos. Nice." : "Nothing here."}
+            {t(filter === "pending" ? "todos.emptyActive" : "todos.empty")}
           </div>
         )}
         {todos.map((todo, i) => (
@@ -1024,7 +1018,7 @@ function PageTodos() {
               if (e.key === "Enter") void handleAdd().catch(console.error);
               if (e.key === "Escape") setAdding(false);
             }}
-            placeholder="Todo title..."
+            placeholder={t("todos.placeholder")}
             style={{
               background: "rgba(255,255,255,0.05)",
               border: "0.5px solid rgba(255,255,255,0.12)",
@@ -1068,7 +1062,7 @@ function PageTodos() {
                 fontFamily: "inherit",
               }}
             >
-              Add
+              {t("todos.addButton")}
             </button>
             <button
               onClick={() => {
@@ -1087,7 +1081,7 @@ function PageTodos() {
                 fontFamily: "inherit",
               }}
             >
-              Cancel
+              {t("todos.cancel")}
             </button>
           </div>
         </div>
@@ -1106,7 +1100,7 @@ function PageTodos() {
             fontFamily: "inherit",
           }}
         >
-          + add todo
+          {t("todos.add")}
         </button>
       )}
     </>
@@ -1143,7 +1137,7 @@ function TodoItem({
     >
       <div
         onClick={onToggle}
-        title="Toggle"
+        title={t("todos.toggle")}
         style={{
           width: 15,
           height: 15,
@@ -1181,14 +1175,14 @@ function TodoItem({
         </div>
         {due && (
           <div style={{ fontSize: 10, color: due.color, marginTop: 2 }}>
-            {todo.notes === "reminder" ? "reminder · " : ""}
+            {todo.notes === "reminder" ? t("todos.reminder") : ""}
             {due.text}
           </div>
         )}
       </div>
       <button
         onClick={onDelete}
-        title="Delete todo"
+        title={t("todos.delete")}
         style={{
           background: "none",
           border: "none",
@@ -1220,7 +1214,7 @@ function PageRecap() {
       .catch(console.error);
   }, []);
 
-  if (!loaded) return <div style={emptyText}>Loading…</div>;
+  if (!loaded) return <div style={emptyText}>{t("common.loading")}</div>;
 
   if (recaps.length === 0) {
     return (
@@ -1232,7 +1226,7 @@ function PageRecap() {
           fontSize: 13,
         }}
       >
-        No recaps yet — the first one lands at your recap time.
+        {t("recap.empty")}
       </div>
     );
   }
@@ -1259,7 +1253,7 @@ function PageRecap() {
               }}
             >
               <div style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.75)" }}>
-                {new Date(y, m - 1, d).toLocaleDateString("id-ID", {
+                {new Date(y, m - 1, d).toLocaleDateString(locale(), {
                   weekday: "long",
                   day: "numeric",
                   month: "short",
@@ -1282,17 +1276,17 @@ function PageRecap() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
               {tile(
                 `${r.todos_completed}/${r.todos_total}`,
-                "tasks",
+                t("recap.tasks"),
                 r.todos_completed > 0 ? "#00e5a0" : "rgba(255,255,255,0.5)",
               )}
               {tile(
                 String(r.pomodoro_sessions),
-                "pomodoros",
+                t("recap.pomodoros"),
                 r.pomodoro_sessions > 0 ? "#60a5fa" : "rgba(255,255,255,0.5)",
               )}
               {tile(
                 `${r.habits_completed}/${r.habits_total}`,
-                "habits",
+                t("recap.habits"),
                 r.habits_completed > 0 ? "#a78bfa" : "rgba(255,255,255,0.5)",
               )}
             </div>
@@ -1318,7 +1312,7 @@ function HabitWeeklyView({ habits }: { habits: HabitRow[] }) {
     const p = (n: number) => String(n).padStart(2, "0");
     return {
       date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
-      label: d.toLocaleDateString("id-ID", { weekday: "short" }).slice(0, 2),
+      label: d.toLocaleDateString(locale(), { weekday: "short" }).slice(0, 2),
     };
   });
 
@@ -1326,7 +1320,7 @@ function HabitWeeklyView({ habits }: { habits: HabitRow[] }) {
 
   return (
     <div>
-      <div style={sectionLabel}>last 7 days</div>
+      <div style={sectionLabel}>{t("habits.week")}</div>
       <div style={card}>
         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
           <thead>
@@ -1426,12 +1420,12 @@ function PageIntegrations() {
     !!s.tokenKey && !!tokens[s.tokenKey]?.trim();
 
   const showPlaceholder = () =>
-    setNote("Coming soon — integration will be set up here.");
+    setNote(t("int.comingSoon"));
 
   return (
     <>
       <div>
-        <div style={sectionLabel}>services</div>
+        <div style={sectionLabel}>{t("int.services")}</div>
         <div style={card}>
           {INTEGRATIONS.map((s, i) => {
             const connected = isConnected(s);
@@ -1475,7 +1469,7 @@ function PageIntegrations() {
                   </div>
                   {s.noToken && (
                     <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 2 }}>
-                      no token needed, just enable
+                      {t("int.noToken")}
                     </div>
                   )}
                 </div>
@@ -1490,7 +1484,7 @@ function PageIntegrations() {
                       color: "#00e5a0",
                     }}
                   >
-                    on
+                    {t("int.on")}
                   </span>
                 ) : (
                   <button
@@ -1505,7 +1499,7 @@ function PageIntegrations() {
                       cursor: "pointer",
                     }}
                   >
-                    {s.noToken ? "enable" : "setup"}
+                    {t(s.noToken ? "int.enable" : "int.setup")}
                   </button>
                 )}
               </div>
@@ -1533,40 +1527,40 @@ function PageIntegrations() {
 }
 
 const TEXT_SETTINGS = [
-  { key: "user_name", label: "User name" },
-  { key: "user_location", label: "Location" },
-  { key: "ollama_model", label: "Ollama model" },
-  { key: "user_timezone", label: "Timezone" },
+  { key: "user_name", label: "set.userName" },
+  { key: "user_location", label: "set.location" },
+  { key: "ollama_model", label: "set.model" },
+  { key: "user_timezone", label: "set.timezone" },
 ] as const;
 
 // Daily briefing (toggle + time) is hidden until it is wired in Phase 2; its
 // settings rows stay seeded.
 const FEATURE_SETTINGS = [
-  { key: "body_checkin_enabled", label: "Body check-in" },
-  { key: "dnd_during_pomodoro", label: "DND saat pomodoro" },
-  { key: "friction_starter_enabled", label: "Friction starter" },
+  { key: "body_checkin_enabled", label: "set.checkin" },
+  { key: "dnd_during_pomodoro", label: "set.dnd" },
+  { key: "friction_starter_enabled", label: "set.friction" },
 ] as const;
 
 const TIME_SETTINGS = [
-  { key: "recap_time", label: "Day recap", fallback: "22:00" },
+  { key: "recap_time", label: "set.recapTime", fallback: "22:00" },
 ] as const;
 
 const CHOICE_SETTINGS = [
   {
     key: "pomodoro_duration",
-    label: "Pomodoro duration",
+    label: "set.pomDuration",
     fallback: "25",
     options: ["15", "20", "25", "30", "45", "60"],
   },
   {
     key: "pomodoro_break",
-    label: "Break duration",
+    label: "set.breakDuration",
     fallback: "5",
     options: ["5", "10", "15", "20"],
   },
   {
     key: "body_checkin_interval",
-    label: "Check-in every",
+    label: "set.checkinEvery",
     fallback: "180",
     options: ["60", "120", "180", "240", "360"],
   },
@@ -1595,23 +1589,26 @@ function PageSettings() {
 
   // Write through to SQLite, then mirror locally so the control stays in sync
   // even if the row did not exist yet.
+  // Every write is announced, so the pet window (and the i18n cache in both
+  // windows) pick it up without a restart.
   const save = async (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
     try {
       await setSetting(key, value);
+      await emit("settings:changed", { key });
     } catch (err) {
       console.error(err);
     }
   };
 
-  if (!loaded) return <div style={emptyText}>Loading…</div>;
+  if (!loaded) return <div style={emptyText}>{t("common.loading")}</div>;
 
   return (
     <>
       <div>
-        <div style={sectionLabel}>general</div>
+        <div style={sectionLabel}>{t("set.general")}</div>
         <div style={card}>
-          <SettingRow label="Language" last={false}>
+          <SettingRow label={t("set.language")} last={false}>
             <select
               value={values.language ?? "en"}
               onChange={(e) => void save("language", e.target.value)}
@@ -1632,7 +1629,7 @@ function PageSettings() {
           </SettingRow>
 
           {TEXT_SETTINGS.map((s, i) => (
-            <SettingRow key={s.key} label={s.label} last={i === TEXT_SETTINGS.length - 1}>
+            <SettingRow key={s.key} label={t(s.label)} last={i === TEXT_SETTINGS.length - 1}>
               <EditableValue
                 value={values[s.key] ?? ""}
                 onSave={(v) => void save(s.key, v)}
@@ -1643,12 +1640,12 @@ function PageSettings() {
       </div>
 
       <div>
-        <div style={sectionLabel}>features</div>
+        <div style={sectionLabel}>{t("set.features")}</div>
         <div style={card}>
           {FEATURE_SETTINGS.map((s, i) => (
             <SettingRow
               key={s.key}
-              label={s.label}
+              label={t(s.label)}
               last={i === FEATURE_SETTINGS.length - 1}
             >
               <Toggle
@@ -1661,10 +1658,10 @@ function PageSettings() {
       </div>
 
       <div>
-        <div style={sectionLabel}>timing</div>
+        <div style={sectionLabel}>{t("set.timing")}</div>
         <div style={card}>
           {TIME_SETTINGS.map((s) => (
-            <SettingRow key={s.key} label={s.label} last={false}>
+            <SettingRow key={s.key} label={t(s.label)} last={false}>
               <input
                 type="time"
                 value={values[s.key] || s.fallback}
@@ -1688,7 +1685,7 @@ function PageSettings() {
           {CHOICE_SETTINGS.map((s, i) => (
             <SettingRow
               key={s.key}
-              label={s.label}
+              label={t(s.label)}
               last={i === CHOICE_SETTINGS.length - 1}
             >
               <select
@@ -1710,11 +1707,11 @@ function PageSettings() {
                 {(s.options as readonly string[]).includes(values[s.key] || s.fallback)
                   ? null
                   : (
-                      <option value={values[s.key]}>{values[s.key]} min</option>
+                      <option value={values[s.key]}>{t("set.minutes", { n: values[s.key] })}</option>
                     )}
                 {s.options.map((v) => (
                   <option key={v} value={v}>
-                    {v} min
+                    {t("set.minutes", { n: v })}
                   </option>
                 ))}
               </select>
@@ -1724,7 +1721,7 @@ function PageSettings() {
       </div>
 
       <div style={{ ...emptyText, paddingTop: 0 }}>
-        Shortcuts: 1-{NAV_ITEMS.length} switch pages · Esc closes this window.
+        {t("set.shortcuts", { n: NAV_ITEMS.length })}
       </div>
     </>
   );
@@ -1785,7 +1782,7 @@ function EditableValue({
           setDraft(value);
           setEditing(true);
         }}
-        title="Click to edit"
+        title={t("set.clickToEdit")}
         style={{
           fontSize: 13,
           color: "rgba(255,255,255,0.3)",

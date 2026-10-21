@@ -1,3 +1,4 @@
+import { t } from "../lib/i18n";
 import { useEffect, useRef, useState } from "react";
 
 interface ChatInputProps {
@@ -53,7 +54,7 @@ export default function ChatInput({ onSend, onClose, disabled }: ChatInputProps)
     >
       {isCommand && (
         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>
-          try /todo &lt;task&gt; or /remind &lt;reminder&gt;
+          {t("chat.commandHint")}
         </div>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
@@ -63,7 +64,7 @@ export default function ChatInput({ onSend, onClose, disabled }: ChatInputProps)
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        placeholder="Ask Nox anything... or /todo"
+        placeholder={t("chat.placeholder")}
         spellCheck={false}
         style={{
           flex: 1,
@@ -82,7 +83,7 @@ export default function ChatInput({ onSend, onClose, disabled }: ChatInputProps)
         <button
           onClick={submit}
           disabled={disabled}
-          title="Send"
+          title={t("chat.send")}
           style={{
             background: "rgba(255,255,255,0.1)",
             border: "0.5px solid rgba(255,255,255,0.15)",

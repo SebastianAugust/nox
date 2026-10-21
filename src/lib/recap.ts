@@ -1,5 +1,6 @@
 import { getDb } from "./db";
 import { getSetting, saveDailyRecap, todayLocal } from "./db-helpers";
+import { t } from "./i18n";
 
 const POLL_MS = 60 * 1000; // check the clock every minute
 const DEFAULT_RECAP_TIME = "22:00";
@@ -102,7 +103,13 @@ export async function generateRecap(): Promise<Recap> {
       one("SELECT COUNT(*) as count FROM habits WHERE active = 1"),
     ]);
 
-  const summary = `${todosDone}/${todosTotal} tasks done · ${pomodoros} pomodoros · ${habitsDone}/${habitsTotal} habits`;
+  const summary = t("recap.summary", {
+    done: todosDone,
+    total: todosTotal,
+    pomodoros,
+    habitsDone,
+    habitsTotal,
+  });
 
   const recap: Recap = {
     date: today,

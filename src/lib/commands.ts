@@ -79,8 +79,10 @@ export type ParsedRemind = {
   title: string;
   /** UTC stamp for the reminders table; absent when no time was given. */
   remind_at?: string;
-  /** How to describe the time back to the user, e.g. "besok 09:00". */
-  when?: string;
+  /** The time as HH:MM, for reading it back to the user. */
+  clock?: string;
+  /** True when the reminder lands on tomorrow's date. */
+  tomorrow?: boolean;
 };
 
 const REMIND_AT =
@@ -115,20 +117,26 @@ export function parseRemindArgs(content: string, now = new Date()): ParsedRemind
     target = addDays(target, 1);
   }
 
-  const clock = `${pad(hour)}:${pad(minute)}`;
-  const sameDay = localDate(target) === localDate(now);
   return {
     title,
     remind_at: toUtcStamp(target),
-    when: sameDay ? clock : `besok ${clock}`,
+    clock: `${pad(hour)}:${pad(minute)}`,
+    tomorrow: localDate(target) !== localDate(now),
   };
 }
 
-/** How to read a due date back to the user: "hari ini", "besok", or "25/12". */
-export function describeDue(due: string, now = new Date()): string {
+/**
+ * How to read a due date back to the user: the given words for today and
+ * tomorrow (the caller passes them in its language), otherwise "25/12".
+ */
+export function describeDue(
+  due: string,
+  words: { today: string; tomorrow: string },
+  now = new Date(),
+): string {
   const today = localDate(now);
-  if (due === today) return "hari ini";
-  if (due === localDate(addDays(now, 1))) return "besok";
+  if (due === today) return words.today;
+  if (due === localDate(addDays(now, 1))) return words.tomorrow;
   const [, m, d] = due.split("-");
   return `${Number(d)}/${Number(m)}`;
 }

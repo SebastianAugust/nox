@@ -1,3 +1,5 @@
+import { t } from "../lib/i18n";
+
 type BubbleProps = {
   text: string;
   isStreaming?: boolean;
@@ -14,7 +16,7 @@ export default function Bubble({ text, isStreaming, onStop }: BubbleProps) {
       {isStreaming && (
         <button
           onClick={onStop}
-          title="Stop"
+          title={t("pet.stop")}
           style={{
             position: "absolute",
             top: 5,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getTodayPomodoroSessions } from "../lib/db-helpers";
+import { t } from "../lib/i18n";
 import type { PomCommand, PomPhase, PomSnapshot } from "../lib/pomodoroEngine";
 
 const DEFAULT_WORK_MINUTES = 25;
@@ -82,7 +83,7 @@ function ProgressRing({
           {formatTime(seconds)}
         </div>
         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
-          {state === "focus" ? "focus" : state === "break" ? "break" : "ready"}
+          {t(state === "focus" ? "pom.ringFocus" : state === "break" ? "pom.ringBreak" : "pom.ringReady")}
         </div>
       </div>
     </div>
@@ -151,8 +152,9 @@ export function Pomodoro({ onSnapshot }: Props) {
   const send = (type: PomCommand["type"]) =>
     emit("pomodoro:cmd", { type } satisfies PomCommand).catch(console.error);
 
-  const label =
-    state === "idle" ? "Ready" : state === "focus" ? "Focus time" : "Break time";
+  const label = t(
+    state === "idle" ? "pom.ready" : state === "focus" ? "pom.focusTime" : "pom.breakTime",
+  );
 
   return (
     <div style={{ textAlign: "center" }}>
@@ -162,7 +164,7 @@ export function Pomodoro({ onSnapshot }: Props) {
         state={state}
       />
       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 16 }}>
-        {label} · {sessionsToday} session{sessionsToday === 1 ? "" : "s"} today
+        {label} · {t(sessionsToday === 1 ? "pom.session" : "pom.sessions", { count: sessionsToday })}
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
         {state === "idle" ? (
@@ -179,7 +181,7 @@ export function Pomodoro({ onSnapshot }: Props) {
               cursor: "pointer",
             }}
           >
-            Start
+            {t("pom.start")}
           </button>
         ) : (
           <button
@@ -194,7 +196,7 @@ export function Pomodoro({ onSnapshot }: Props) {
               cursor: "pointer",
             }}
           >
-            {state === "focus" ? "Stop" : "Skip break"}
+            {t(state === "focus" ? "pom.stop" : "pom.skip")}
           </button>
         )}
       </div>

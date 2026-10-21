@@ -1,3 +1,4 @@
+import { t } from "../lib/i18n";
 import { MOODS, type Mood } from "../lib/checkin";
 
 type Props = {
@@ -31,10 +32,10 @@ export default function CheckinPrompt({ onPick, onDismiss }: Props) {
           marginBottom: 6,
         }}
       >
-        <span>How are you right now?</span>
+        <span>{t("checkin.question")}</span>
         <button
           onClick={onDismiss}
-          title="Not now"
+          title={t("checkin.notNow")}
           style={{
             background: "none",
             border: "none",
@@ -52,7 +53,7 @@ export default function CheckinPrompt({ onPick, onDismiss }: Props) {
         <button
           key={m.key}
           onClick={() => onPick(m)}
-          title={m.label}
+          title={t(m.labelKey)}
           style={{
             flex: 1,
             minWidth: 0,
@@ -68,7 +69,7 @@ export default function CheckinPrompt({ onPick, onDismiss }: Props) {
           }}
         >
           <div style={{ fontSize: 13 }}>{m.emoji}</div>
-          {m.label}
+          {t(m.labelKey)}
         </button>
       ))}
       </div>

@@ -1,18 +1,19 @@
 import { getSetting, hoursSinceLastMood, saveMoodLog } from "./db-helpers";
+import type { I18nKey } from "./i18n";
 
 // How often we re-evaluate whether a check-in is due. The interval between
 // check-ins themselves comes from the `body_checkin_interval` setting.
 const POLL_MS = 30 * 60 * 1000; // 30 minutes
 const DEFAULT_INTERVAL_MINUTES = 180;
 
-export type Mood = { key: string; label: string; emoji: string; energy: number };
+export type Mood = { key: string; labelKey: I18nKey; emoji: string; energy: number };
 
 /** The options offered in the check-in bubble, lowest energy last. */
 export const MOODS: Mood[] = [
-  { key: "good", label: "Good", emoji: "😊", energy: 5 },
-  { key: "ok", label: "Ok", emoji: "😐", energy: 3 },
-  { key: "tired", label: "Tired", emoji: "😔", energy: 1 },
-  { key: "hungry", label: "Hungry", emoji: "🍽", energy: 2 },
+  { key: "good", labelKey: "mood.good", emoji: "😊", energy: 5 },
+  { key: "ok", labelKey: "mood.ok", emoji: "😐", energy: 3 },
+  { key: "tired", labelKey: "mood.tired", emoji: "😔", energy: 1 },
+  { key: "hungry", labelKey: "mood.hungry", emoji: "🍽", energy: 2 },
 ];
 
 /**
