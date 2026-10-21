@@ -1,13 +1,15 @@
+mod db;
 mod ollama;
 mod pet;
 
 use std::sync::Mutex;
-use tauri_plugin_sql::{Migration, MigrationKind};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, WebviewWindow, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, Listener, Manager, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_sql::{Migration, MigrationKind};
 
 /// While the dashboard is open: whether the pet should be visible once it
 /// closes (its visibility before opening, updated by tray show/hide in the
@@ -37,10 +39,39 @@ fn show_pet(window: &WebviewWindow) {
     let _ = window.emit("pet:shown", ());
 }
 
-/// Show the pet from the tray and focus it.
-fn reveal_window(window: &WebviewWindow) {
-    show_pet(window);
-    let _ = window.set_focus();
+/// The user shows or hides the pet (tray, second launch). Remembered across
+/// restarts in `pet_visible`, unlike the dashboard pausing it.
+fn set_pet_visible(app: &AppHandle, visible: bool) {
+    remember_pet(app, visible);
+    db::write_setting(app, "pet_visible", visible.to_string());
+    if let Some(w) = app.get_webview_window("main") {
+        if visible {
+            show_pet(&w);
+            let _ = w.set_focus();
+        } else {
+            let _ = w.hide();
+        }
+    }
+}
+
+/// Make "Start with Windows" match the `autostart` setting. The first run
+/// (no row yet) turns it on.
+fn sync_autostart(app: &AppHandle) {
+    let wanted = match db::read_setting(app, "autostart") {
+        Some(v) => v != "false",
+        None => {
+            db::write_setting(app, "autostart", "true".into());
+            true
+        }
+    };
+    let launcher = app.autolaunch();
+    if launcher.is_enabled().unwrap_or(!wanted) == wanted {
+        return;
+    }
+    let result = if wanted { launcher.enable() } else { launcher.disable() };
+    if let Err(e) = result {
+        eprintln!("could not change autostart: {e}");
+    }
 }
 
 /// The dashboard window, rebuilt from tauri.conf.json if it no longer exists
@@ -119,6 +150,12 @@ fn migrations() -> Vec<Migration> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // First, so a second launch exits before building anything; it only
+        // brings the running pet back.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            set_pet_visible(app, true);
+        }))
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .manage(DashboardState::default())
         .manage(ollama::OllamaRequests::default())
         .manage(pet::HitRegions::default())
@@ -132,10 +169,26 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            // The pet starts hidden (tauri.conf.json) and is shown once
+            // placed, unless the user had hidden it.
             if let Some(window) = app.get_webview_window("main") {
                 pet::restore_position(&window);
+                if db::read_setting(app.handle(), "pet_visible").as_deref() != Some("false") {
+                    show_pet(&window);
+                }
             }
             pet::start_click_through(app.handle());
+
+            sync_autostart(app.handle());
+            // The dashboard announces every settings write.
+            let handle = app.handle().clone();
+            app.listen("settings:changed", move |event| {
+                if event.payload().contains("\"autostart\"") {
+                    // Off the event thread: this reads the database and the registry.
+                    let handle = handle.clone();
+                    std::thread::spawn(move || sync_autostart(&handle));
+                }
+            });
 
             // Right-click tray menu.
             let dashboard_i =
@@ -157,18 +210,8 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "dashboard" => open_dashboard(app),
-                    "show" => {
-                        remember_pet(app, true);
-                        if let Some(w) = app.get_webview_window("main") {
-                            reveal_window(&w);
-                        }
-                    }
-                    "hide" => {
-                        remember_pet(app, false);
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.hide();
-                        }
-                    }
+                    "show" => set_pet_visible(app, true),
+                    "hide" => set_pet_visible(app, false),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -181,13 +224,7 @@ pub fn run() {
                     {
                         let app = tray.app_handle();
                         if let Some(w) = app.get_webview_window("main") {
-                            if w.is_visible().unwrap_or(false) {
-                                remember_pet(app, false);
-                                let _ = w.hide();
-                            } else {
-                                remember_pet(app, true);
-                                reveal_window(&w);
-                            }
+                            set_pet_visible(app, !w.is_visible().unwrap_or(false));
                         }
                     }
                 })

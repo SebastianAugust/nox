@@ -1633,6 +1633,7 @@ const FEATURE_SETTINGS = [
   { key: "body_checkin_enabled", label: "set.checkin" },
   { key: "dnd_during_pomodoro", label: "set.dnd" },
   { key: "friction_starter_enabled", label: "set.friction" },
+  { key: "autostart", label: "set.autostart" },
 ] as const;
 
 const TIME_SETTINGS = [

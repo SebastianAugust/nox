@@ -28,3 +28,5 @@ tauri-plugin-notification = "2"
 
 # Same sqlx as tauri-plugin-sql, to read settings from Rust at startup.
 sqlx = { version = "0.8", default-features = false, features = ["sqlite"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"

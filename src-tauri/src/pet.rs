@@ -11,7 +11,8 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use tauri::{AppHandle, LogicalSize, Manager, PhysicalPosition, State, WebviewWindow};
-use tauri_plugin_sql::{DbInstances, DbPool};
+
+use crate::db::read_setting;
 
 // Window logical dimensions (must match tauri.conf.json).
 const WIN_W: f64 = 160.0;
@@ -31,27 +32,6 @@ struct Rect {
     y: i32,
     w: i32,
     h: i32,
-}
-
-/// Read one row of the `settings` table. The database is preloaded by the
-/// SQL plugin, whose setup runs before ours.
-pub fn read_setting(app: &AppHandle, key: &str) -> Option<String> {
-    let instances = app.try_state::<DbInstances>()?;
-    tauri::async_runtime::block_on(async {
-        let dbs = instances.0.read().await;
-        // Only the sqlite driver is enabled, but the enum may grow.
-        #[allow(irrefutable_let_patterns)]
-        let DbPool::Sqlite(pool) = dbs.get("sqlite:nox.db")? else {
-            return None;
-        };
-        sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = ?")
-            .bind(key)
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| eprintln!("could not read setting {key}: {e}"))
-            .ok()
-            .flatten()
-    })
 }
 
 /// Move `rect` fully inside the work area it overlaps most. `None` when it
