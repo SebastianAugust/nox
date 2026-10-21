@@ -1,4 +1,4 @@
-import { getSetting } from "./db-helpers";
+import { getSettings } from "./db";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -8,49 +8,95 @@ const DEFAULT_MODEL = "llama3.2:3b";
 const HISTORY_LIMIT = 6; // keep last 6 messages (≈3 exchanges) for speed
 const TIMEOUT_MS = 15000;
 
-// The model is a user setting; cached after the first read so it costs nothing
-// per message, and re-read on failure so a settings change takes effect.
-let cachedModel: string | null = null;
+type PromptSettings = {
+  model: string;
+  name: string;
+  location: string;
+  timeZone: string | undefined;
+  language: "en" | "id";
+};
 
-async function getModel(): Promise<string> {
-  if (cachedModel) return cachedModel;
+/**
+ * Everything the prompt depends on comes from settings and is read on every
+ * request, so a change in the dashboard applies to the very next message.
+ */
+async function readPromptSettings(): Promise<PromptSettings> {
+  const s = await getSettings([
+    "ollama_model",
+    "user_name",
+    "user_location",
+    "user_timezone",
+    "language",
+  ]).catch((err) => {
+    console.error(err);
+    return {} as Record<string, string>;
+  });
+
+  // An unknown zone name would make Intl throw; fall back to the system zone.
+  let timeZone: string | undefined = s.user_timezone?.trim() || undefined;
   try {
-    cachedModel = (await getSetting("ollama_model"))?.trim() || DEFAULT_MODEL;
+    new Intl.DateTimeFormat("en-US", { timeZone });
   } catch {
-    cachedModel = DEFAULT_MODEL;
+    timeZone = undefined;
   }
-  return cachedModel;
+
+  return {
+    model: s.ollama_model?.trim() || DEFAULT_MODEL,
+    name: s.user_name?.trim() || "there",
+    location: s.user_location?.trim() || "unknown",
+    timeZone,
+    language: s.language === "id" ? "id" : "en",
+  };
 }
 
 // Built fresh on every request so the model always sees the real current
-// time/date (in WIB) and the user's location.
-function getSystemPrompt(): string {
+// time/date in the user's timezone.
+function getSystemPrompt({ name, location, timeZone, language }: PromptSettings): string {
   const now = new Date();
-  const timeStr = now.toLocaleString("id-ID", {
-    timeZone: "Asia/Jakarta",
+  const locale = language === "id" ? "id-ID" : "en-US";
+  const dateTime = new Intl.DateTimeFormat(locale, {
+    timeZone,
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  });
-  const clockStr = now.toLocaleTimeString("id-ID", {
-    timeZone: "Asia/Jakarta",
+  }).format(now);
+  const clock = new Intl.DateTimeFormat(locale, {
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
-  });
-  const weekdayEn = now.toLocaleDateString("en-US", {
-    timeZone: "Asia/Jakarta",
-    weekday: "long",
-  });
+  }).format(now);
+  const weekday = new Intl.DateTimeFormat(locale, { timeZone, weekday: "long" }).format(now);
+  const offset =
+    new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "shortOffset" })
+      .formatToParts(now)
+      .find((p) => p.type === "timeZoneName")?.value ?? "";
+  const zoneLabel = [timeZone, offset].filter(Boolean).join(", ");
 
-  return `You are Nox, a tiny desktop pet assistant living in the corner of Bas's screen.
+  const languageRule =
+    language === "id"
+      ? "- Always reply in Indonesian, even when the user writes in English. Balas dalam Bahasa Indonesia."
+      : "- Always reply in English, even when the user writes in Indonesian.";
+
+  const examples =
+    language === "id"
+      ? `User: "jam berapa sekarang?" → "Sekarang jam ${clock}."
+User: "hari apa sekarang?" → "Hari ini ${weekday}."
+User: "hi" → "Hai. Ada apa?"
+User: "jelasin fisika kuantum" → "Kepanjangan buat gelembung sekecil ini. Coba Google, ${name}."`
+      : `User: "what time is it?" → "It's ${clock}."
+User: "what day is it?" → "It's ${weekday}."
+User: "hi" → "Hey. What's up?"
+User: "explain quantum physics" → "Too long for a speech bubble. Google it, ${name}."`;
+
+  return `You are Nox, a tiny desktop pet assistant living in the corner of ${name}'s screen.
 
 CURRENT CONTEXT:
-- Date and time: ${timeStr} WIB (Western Indonesia Time, UTC+7)
-- User location: Medan, North Sumatra, Indonesia
-- User name: Bas (Sebastian)
+- Date and time: ${dateTime}${zoneLabel ? ` (${zoneLabel})` : ""}
+- User location: ${location}
+- User name: ${name}
 
 STRICT RULES:
 - Max 2 sentences per response. Never exceed this.
@@ -58,17 +104,14 @@ STRICT RULES:
 - Use the current time/date above when asked about time — it is always accurate
 - Never make up facts or information you don't have
 - If you don't know something, say so in one sentence
-- Default language: English. If Bas writes in Indonesian, respond in Indonesian
+${languageRule}
 - You help with: tasks, reminders, schedules, quick questions
 - Never start with "I" — vary your sentence starters
 - No emojis
 - Keep responses SHORT — you live in a tiny speech bubble
 
 Examples of good responses:
-User: "jam berapa sekarang?" → "Sekarang ${clockStr} WIB."
-User: "what day is it?" → "It's ${weekdayEn}."
-User: "hi" → "Hey. What's up?"
-User: "explain quantum physics" → "Too long for a speech bubble. Google it, Bas."`;
+${examples}`;
 }
 
 /**
@@ -95,7 +138,8 @@ export async function chat(
     onError("Taking too long... try a shorter question.");
   }, TIMEOUT_MS);
 
-  const model = await getModel();
+  const settings = await readPromptSettings();
+  const model = settings.model;
 
   try {
     const response = await fetch(OLLAMA_URL, {
@@ -105,7 +149,7 @@ export async function chat(
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: getSystemPrompt() },
+          { role: "system", content: getSystemPrompt(settings) },
           ...history.slice(-HISTORY_LIMIT),
           { role: "user", content: message },
         ],
@@ -122,7 +166,6 @@ export async function chat(
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       clearTimeout(timeout);
-      cachedModel = null;
       onError(
         /model/i.test(body)
           ? `Model not loaded. Run \`ollama pull ${model}\`.`
@@ -161,8 +204,7 @@ export async function chat(
         }
         if (data.error) {
           clearTimeout(timeout);
-          cachedModel = null;
-          onError(
+              onError(
             /model/i.test(String(data.error))
               ? `Model not loaded. Run \`ollama pull ${model}\`.`
               : "Something went wrong. Try again.",

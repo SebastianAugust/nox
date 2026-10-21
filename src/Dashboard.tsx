@@ -1534,19 +1534,20 @@ function PageIntegrations() {
 
 const TEXT_SETTINGS = [
   { key: "user_name", label: "User name" },
+  { key: "user_location", label: "Location" },
   { key: "ollama_model", label: "Ollama model" },
   { key: "user_timezone", label: "Timezone" },
 ] as const;
 
+// Daily briefing (toggle + time) is hidden until it is wired in Phase 2; its
+// settings rows stay seeded.
 const FEATURE_SETTINGS = [
-  { key: "daily_briefing_enabled", label: "Daily briefing" },
   { key: "body_checkin_enabled", label: "Body check-in" },
   { key: "dnd_during_pomodoro", label: "DND saat pomodoro" },
   { key: "friction_starter_enabled", label: "Friction starter" },
 ] as const;
 
 const TIME_SETTINGS = [
-  { key: "daily_briefing_time", label: "Daily briefing", fallback: "08:00" },
   { key: "recap_time", label: "Day recap", fallback: "22:00" },
 ] as const;
 

@@ -291,12 +291,11 @@ async function initTables(db: Database) {
     )
   `);
 
-  // Insert default settings
+  // Insert default settings. Keys that nothing reads are no longer seeded;
+  // rows already in an existing database are left alone.
   await db.execute(`
     INSERT OR IGNORE INTO settings (key, value) VALUES
     ('language', 'en'),
-    ('theme', 'dark'),
-    ('pet_position', 'bottom-right'),
     ('pomodoro_duration', '25'),
     ('pomodoro_break', '5'),
     ('dnd_during_pomodoro', 'true'),
@@ -306,12 +305,9 @@ async function initTables(db: Database) {
     ('friction_starter_enabled', 'true'),
     ('recap_time', '22:00'),
     ('body_checkin_interval', '180'),
-    ('notification_digest_interval', '60'),
     ('ollama_model', 'llama3.2:3b'),
     ('user_name', 'Bas'),
     ('user_timezone', 'Asia/Jakarta'),
-    ('user_location', 'Medan, North Sumatra, Indonesia'),
-    ('notion_sync_interval', '30'),
-    ('clipboard_max_items', '50')
+    ('user_location', 'Medan, North Sumatra, Indonesia')
   `);
 }
