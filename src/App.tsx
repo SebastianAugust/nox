@@ -341,13 +341,17 @@ function App() {
         }
         break;
       }
+      case "dashboard":
+        // The pet hides itself while the dashboard is open.
+        invoke("show_dashboard").catch(console.error);
+        break;
       case "help":
         setBubbleText(
-          "/todo <task> [besok | hari ini | 25/12] · /remind <thing> jam 09:00",
+          "/todo <task> [besok | hari ini | 25/12] · /remind <thing> jam 09:00 · /dashboard",
         );
         break;
       default:
-        setBubbleText(`No such command. Try /todo, /remind or /help.`);
+        setBubbleText(`No such command. Try /todo, /remind, /dashboard or /help.`);
     }
 
     setOpen(false);
