@@ -12,7 +12,7 @@ export default function Bubble({ text, isStreaming, onStop }: BubbleProps) {
   return (
     // Wrapper is not clipped, so the pointer + stop button sit outside the
     // scrolling text box (overflow:auto would otherwise clip them).
-    <div style={{ position: "relative", width: "100%" }}>
+    <div data-hit style={{ position: "relative", width: "100%" }}>
       {isStreaming && (
         <button
           onClick={onStop}

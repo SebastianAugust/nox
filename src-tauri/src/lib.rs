@@ -1,11 +1,12 @@
 mod ollama;
+mod pet;
 
 use std::sync::Mutex;
 use tauri_plugin_sql::{Migration, MigrationKind};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, PhysicalPosition, WebviewWindow, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, Manager, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
 
 /// While the dashboard is open: whether the pet should be visible once it
@@ -29,58 +30,17 @@ fn remember_pet(app: &AppHandle, visible: bool) {
     }
 }
 
-// Window logical dimensions (must match tauri.conf.json).
-const WIN_W: f64 = 160.0;
-const WIN_H: f64 = 200.0;
-const MARGIN_RIGHT: f64 = 16.0;
-const MARGIN_BOTTOM: f64 = 48.0;
-
-/// Dock a window of the given logical size to the bottom-right of the primary
-/// monitor, above the taskbar.
-fn position_window_sized(window: &WebviewWindow, w: f64, h: f64) {
-    if let Ok(Some(monitor)) = window.primary_monitor() {
-        let scale = monitor.scale_factor();
-        let size = monitor.size();
-        let x = size.width as i32 - (w * scale) as i32 - (MARGIN_RIGHT * scale) as i32;
-        let y = size.height as i32 - (h * scale) as i32 - (MARGIN_BOTTOM * scale) as i32;
-        let _ = window.set_position(PhysicalPosition::new(x, y));
-    }
-}
-
-/// Dock the window at its default (collapsed) size.
-fn position_window(window: &WebviewWindow) {
-    position_window_sized(window, WIN_W, WIN_H);
-}
-
-/// Show the pet and tell it, so held messages and missed reminders come out.
+/// Show the pet (where it was, kept on screen) and tell it, so held messages
+/// and missed reminders come out.
 fn show_pet(window: &WebviewWindow) {
-    let _ = window.show();
+    pet::show(window);
     let _ = window.emit("pet:shown", ());
 }
 
-/// Show the window at its docked position and focus it.
+/// Show the pet from the tray and focus it.
 fn reveal_window(window: &WebviewWindow) {
     show_pet(window);
     let _ = window.set_focus();
-    position_window(window);
-}
-
-/// Resize the window to a new height, keeping its bottom and left edges fixed
-/// (the pet is bottom-anchored) so a dragged position is preserved instead of
-/// snapping back to the bottom-right dock.
-#[tauri::command]
-fn resize_window(window: WebviewWindow, height: u32) {
-    let scale = window.scale_factor().unwrap_or(1.0);
-    let old_pos = window.outer_position().ok();
-    let old_size = window.outer_size().ok();
-    let new_ph = (height as f64 * scale).round() as i32;
-
-    let _ = window.set_size(tauri::LogicalSize::new(WIN_W, height as f64));
-
-    if let (Some(pos), Some(size)) = (old_pos, old_size) {
-        let bottom = pos.y + size.height as i32;
-        let _ = window.set_position(PhysicalPosition::new(pos.x, bottom - new_ph));
-    }
 }
 
 /// The dashboard window, rebuilt from tauri.conf.json if it no longer exists
@@ -161,6 +121,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(DashboardState::default())
         .manage(ollama::OllamaRequests::default())
+        .manage(pet::HitRegions::default())
         // Migrations run once at startup for the preloaded database (see
         // `plugins.sql.preload` in tauri.conf.json), before any window queries.
         // Never edit a released migration; add the next number instead.
@@ -172,8 +133,9 @@ pub fn run() {
         )
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
-                position_window(&window);
+                pet::restore_position(&window);
             }
+            pet::start_click_through(app.handle());
 
             // Right-click tray menu.
             let dashboard_i =
@@ -244,7 +206,8 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            resize_window,
+            pet::resize_window,
+            pet::set_hit_regions,
             show_dashboard,
             close_dashboard,
             ollama::ollama_chat,

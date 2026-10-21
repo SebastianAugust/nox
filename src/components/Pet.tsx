@@ -50,6 +50,7 @@ export default function Pet({ onClick, onMouseDown, state = "idle" }: PetProps) 
 
   return (
     <div
+      data-hit
       onClick={onClick}
       onMouseDown={onMouseDown}
       title={t("pet.title")}

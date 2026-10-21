@@ -12,7 +12,7 @@ Everything runs and is stored locally; the only network call goes to Ollama on
 - **`main`**: the transparent, always-on-top pet overlay (`src/App.tsx`). It owns all timers: reminders, check-ins, friction nudge, recap, and the pomodoro engine (`src/lib/pomodoroEngine.ts`).
 - **`dashboard`**: a regular dark window (`src/Dashboard.tsx`) for habits, todos, pomodoro, recap and settings. It is a view plus remote control. The pet is paused while it is open.
 - Windows talk through Tauri events (`pomodoro:*`, `settings:changed`) and the shared SQLite database.
-- **Rust** (`src-tauri/src/lib.rs`) only does window docking/resizing, the tray menu and dashboard open/close.
+- **Rust**: `src-tauri/src/lib.rs` has the tray menu and dashboard open/close; `src-tauri/src/pet.rs` places the pet (saved position, kept on screen, default dock) and runs click-through, a cursor poll against the hit regions the page reports.
 - **SQLite** through `tauri-plugin-sql`. The schema and default settings are numbered migrations in `src-tauri/migrations/`, run once by Rust at startup; queries live in `src/lib/db-helpers.ts`.
 - **Chat**: `src/lib/ollama.ts` streams from Ollama, with a system prompt built from settings on every message.
 - **UI strings**: `src/lib/i18n.ts` (English / Indonesian, chosen by the `language` setting).

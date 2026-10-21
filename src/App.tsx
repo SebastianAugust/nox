@@ -7,7 +7,7 @@ import ChatInput from "./components/ChatInput";
 import CheckinPrompt from "./components/CheckinPrompt";
 import { chat, type ChatMessage } from "./lib/ollama";
 import { getDb } from "./lib/db";
-import { addReminder, addTodo, getSetting } from "./lib/db-helpers";
+import { addReminder, addTodo, getSetting, setSetting } from "./lib/db-helpers";
 import { describeDue, parseRemindArgs, parseTodoArgs } from "./lib/commands";
 import { t, useLanguage } from "./lib/i18n";
 import { saveCheckin, startCheckinScheduler, type Mood } from "./lib/checkin";
@@ -26,6 +26,7 @@ const HISTORY_LIMIT = 6;
 const HEIGHT_OPEN = 320;
 const HEIGHT_CHECKIN = 250;
 const HEIGHT_CLOSED = 200;
+const SAVE_POSITION_MS = 500; // debounce after the window stops moving
 const REVERT_MS = 10000; // how long an answer lingers before the bubble resets
 const FLASH_MS = 4000; // how long a one-off expression (excited/happy) holds
 
@@ -62,6 +63,8 @@ function App() {
   const revertTimerRef = useRef<number | null>(null);
   const flashTimerRef = useRef<number | null>(null);
   const lastActivityRef = useRef(Date.now());
+  const draggingRef = useRef(false);
+  const reportHitsRef = useRef<() => void>(() => {});
 
   // Open the local SQLite database once on startup (Rust already migrated it).
   useEffect(() => {
@@ -128,6 +131,57 @@ function App() {
     touch();
     setOpen(!chatOpen);
   };
+
+  // Click-through: tell Rust where the visible parts (data-hit) are; the
+  // transparent rest of the window lets clicks through to the app behind.
+  // While the chat is open or a drag runs, the whole window takes clicks.
+  useEffect(() => {
+    let last = "";
+    const report = () => {
+      const rects = Array.from(document.querySelectorAll("[data-hit]"), (el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.left, y: r.top, width: r.width, height: r.height };
+      });
+      const solid = chatOpen || draggingRef.current;
+      const key = JSON.stringify([rects, solid]);
+      if (key === last) return;
+      last = key;
+      invoke("set_hit_regions", { rects, solid }).catch(console.error);
+    };
+    reportHitsRef.current = report;
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(document.body);
+    document.querySelectorAll("[data-hit]").forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [chatOpen, showCheckin]);
+
+  // Remember where the pet was put. Saved as the top-left the window has at
+  // its collapsed height, so a move while the chat is open restores right;
+  // Rust reads it back on startup.
+  useEffect(() => {
+    const win = getCurrentWindow();
+    let timer: number | undefined;
+    const unlisten = win.onMoved(() => {
+      clearTimeout(timer);
+      timer = window.setTimeout(async () => {
+        // The window stopped moving, so any drag is over.
+        draggingRef.current = false;
+        reportHitsRef.current();
+        const [pos, size, scale] = await Promise.all([
+          win.outerPosition(),
+          win.outerSize(),
+          win.scaleFactor(),
+        ]);
+        const y = pos.y + size.height - Math.round(HEIGHT_CLOSED * scale);
+        await setSetting("pet_position", JSON.stringify({ x: pos.x, y }));
+      }, SAVE_POSITION_MS);
+    });
+    return () => {
+      clearTimeout(timer);
+      unlisten.then((off) => off()).catch(console.error);
+    };
+  }, []);
 
   // ── Schedulers ────────────────────────────────────────────────────────────
   // Each start* returns its own stop function, so React's dev double-invoke
@@ -277,6 +331,11 @@ function App() {
     if (e.button !== 0) return; // left button only
     const startX = e.screenX;
     const startY = e.screenY;
+    // Keep the whole window solid while the button is down, so the cursor
+    // leaving the sprite mid-drag cannot turn on click-through. Cleared on
+    // release, or once the window stops moving after a drag.
+    draggingRef.current = true;
+    reportHitsRef.current();
 
     const cleanup = () => {
       window.removeEventListener("mousemove", onMove);
@@ -288,7 +347,11 @@ function App() {
         getCurrentWindow().startDragging().catch(console.error);
       }
     };
-    const onUp = () => cleanup();
+    const onUp = () => {
+      cleanup();
+      draggingRef.current = false;
+      reportHitsRef.current();
+    };
 
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);

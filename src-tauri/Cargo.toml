@@ -26,3 +26,5 @@ serde_json = "1"
 reqwest = { version = "0.13", default-features = false }
 tauri-plugin-notification = "2"
 
+# Same sqlx as tauri-plugin-sql, to read settings from Rust at startup.
+sqlx = { version = "0.8", default-features = false, features = ["sqlite"] }

@@ -41,6 +41,7 @@ export default function ChatInput({ onSend, onClose, onFocusChange, disabled }: 
 
   return (
     <div
+      data-hit
       style={{
         width: "100%",
         background: "rgba(12, 16, 32, 0.88)",
