@@ -1,3 +1,5 @@
+mod ollama;
+
 use std::sync::Mutex;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
@@ -142,6 +144,7 @@ async fn close_dashboard(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .manage(DashboardState::default())
+        .manage(ollama::OllamaRequests::default())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
@@ -219,7 +222,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             resize_window,
             show_dashboard,
-            close_dashboard
+            close_dashboard,
+            ollama::ollama_chat,
+            ollama::ollama_cancel
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

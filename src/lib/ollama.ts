@@ -1,9 +1,9 @@
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { getSettings } from "./db";
 import { t } from "./i18n";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
-const OLLAMA_URL = "http://localhost:11434/api/chat";
 const DEFAULT_MODEL = "llama3.2:3b";
 
 const HISTORY_LIMIT = 6; // keep last 6 messages (≈3 exchanges) for speed
@@ -123,14 +123,27 @@ function modelMissing(errorText: string): boolean {
   return /model/i.test(errorText) && /not found|pull/i.test(errorText);
 }
 
+/** What the Rust `ollama_chat` command streams back, one message at a time. */
+type OllamaEvent =
+  | { kind: "line"; text: string }
+  | { kind: "httpError"; status: number; body: string }
+  | { kind: "unreachable" }
+  | { kind: "end" };
+
+let nextRequestId = 1;
+
 /**
  * Stream a chat completion from Ollama.
+ *
+ * The HTTP request runs in Rust (`ollama_chat`), not in the webview: a release
+ * build's page origin is http://tauri.localhost, which Ollama's default CORS
+ * allow-list rejects. Rust streams the NDJSON lines back over a Channel.
  *
  * `message` is the new user turn; `history` is the prior conversation (trimmed
  * to the last few turns here). The caller owns `controller` so the UI can abort
  * (stop button); a 15s timeout also aborts it. Results are delivered via
  * callbacks — `onDone` on normal completion or user-stop, `onError` with a
- * bubble-safe message on failure/timeout.
+ * bubble-safe message on failure/timeout. Exactly one of them fires.
  */
 export async function chat(
   message: string,
@@ -140,106 +153,108 @@ export async function chat(
   onDone: () => void,
   onError: (err: string) => void,
 ): Promise<void> {
-  let timedOut = false;
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-    onError(t("ollama.timeout"));
-  }, TIMEOUT_MS);
-
   const settings = await readPromptSettings();
   const model = settings.model;
+  const requestId = nextRequestId++;
+  const body = {
+    model,
+    messages: [
+      { role: "system", content: getSystemPrompt(settings) },
+      ...history.slice(-HISTORY_LIMIT),
+      { role: "user", content: message },
+    ],
+    stream: true,
+    options: {
+      num_predict: 80, // ≈2 sentences
+      temperature: 0.7,
+      top_p: 0.9,
+      repeat_penalty: 1.1,
+    },
+  };
 
-  try {
-    const response = await fetch(OLLAMA_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: getSystemPrompt(settings) },
-          ...history.slice(-HISTORY_LIMIT),
-          { role: "user", content: message },
-        ],
-        stream: true,
-        options: {
-          num_predict: 80, // ≈2 sentences
-          temperature: 0.7,
-          top_p: 0.9,
-          repeat_penalty: 1.1,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
+  return new Promise<void>((resolve) => {
+    let finished = false;
+    const finish = (report: () => void) => {
+      if (finished) return;
+      finished = true;
       clearTimeout(timeout);
-      onError(
-        modelMissing(body)
-          ? t("ollama.modelMissing", { model })
-          : t("ollama.error", { status: response.status }),
-      );
-      return;
-    }
+      controller.signal.removeEventListener("abort", onAbort);
+      report();
+      resolve();
+    };
+    const cancel = () =>
+      invoke("ollama_cancel", { requestId }).catch(console.error);
 
-    const reader = response.body?.getReader();
-    if (!reader) {
-      clearTimeout(timeout);
-      onError(t("ollama.failed"));
-      return;
-    }
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, TIMEOUT_MS);
 
-    const decoder = new TextDecoder();
-    let buffer = "";
+    // A user stop finalizes normally so any partial text is kept; a timeout
+    // reports an error instead.
+    const onAbort = () => {
+      cancel();
+      finish(timedOut ? () => onError(t("ollama.timeout")) : onDone);
+    };
+    controller.signal.addEventListener("abort", onAbort);
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      // Ollama emits newline-delimited JSON; keep the trailing partial line.
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        let data: any;
-        try {
-          data = JSON.parse(trimmed);
-        } catch {
-          continue;
-        }
-        if (data.error) {
-          clearTimeout(timeout);
-              onError(
+    const handleLine = (line: string) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      let data: any;
+      try {
+        data = JSON.parse(trimmed);
+      } catch {
+        return;
+      }
+      if (data.error) {
+        cancel();
+        finish(() =>
+          onError(
             modelMissing(String(data.error))
               ? t("ollama.modelMissing", { model })
-              : t("ollama.error", { status: response.status }),
-          );
-          return;
-        }
-        if (data.message?.content) onChunk(data.message.content);
-        if (data.done) {
-          clearTimeout(timeout);
-          onDone();
-          return;
-        }
+              : t("ollama.failed"),
+          ),
+        );
+        return;
       }
-    }
+      if (data.message?.content && !finished) onChunk(data.message.content);
+      if (data.done) finish(onDone);
+    };
 
-    clearTimeout(timeout);
-    onDone();
-  } catch (err: any) {
-    clearTimeout(timeout);
-    if (err?.name === "AbortError") {
-      // Timeout already reported via onError; a user-triggered stop finalizes
-      // normally so any partial text is kept.
-      if (!timedOut) onDone();
+    const channel = new Channel<OllamaEvent>();
+    channel.onmessage = (event) => {
+      if (finished) return;
+      switch (event.kind) {
+        case "line":
+          handleLine(event.text);
+          break;
+        case "httpError":
+          finish(() =>
+            onError(
+              modelMissing(event.body)
+                ? t("ollama.modelMissing", { model })
+                : t("ollama.error", { status: event.status }),
+            ),
+          );
+          break;
+        case "unreachable":
+          finish(() => onError(t("ollama.unreachable")));
+          break;
+        case "end":
+          finish(onDone);
+          break;
+      }
+    };
+
+    if (controller.signal.aborted) {
+      onAbort();
       return;
     }
-    // fetch() rejects on connection refused / network failure.
-    onError(t("ollama.unreachable"));
-  }
+    invoke("ollama_chat", { requestId, body, onEvent: channel }).catch((err) => {
+      console.error(err);
+      finish(() => onError(t("ollama.failed")));
+    });
+  });
 }
