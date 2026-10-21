@@ -84,6 +84,23 @@ checksum and refuses to start when it changes. Foreign keys are not enforced
 consistently (the pragma is per connection), so helpers delete dependent rows
 themselves.
 
+## Security notes
+
+- **What is stored:** `nox.db` (see Data) holds your settings (name, location,
+  timezone), todos, reminders, habits, mood check-ins, pomodoro sessions, day
+  recaps and the chat history. It is plain, unencrypted SQLite readable by
+  anything running as your Windows user. `/clear` deletes the chat history.
+- **Network:** only Rust talks to the network, and only to Ollama on
+  `localhost:11434`. The webviews have a strict CSP (`app.security.csp` in
+  `tauri.conf.json`): no remote scripts, styles, images or connections. Dev
+  mode uses `devCsp`, which additionally allows Vite's inline module script
+  and HMR socket on `ws://localhost:1420`.
+- **Permissions:** each window gets its own capability file in
+  `src-tauri/capabilities/` (`pet.json`, `dashboard.json`) with only what it
+  uses.
+- **Tokens (Phase 2):** API tokens (Notion etc.) will go to the Windows
+  Credential Manager, never into `nox.db` or a settings file.
+
 ## Slash commands (pet chat)
 
 | Command | Does |

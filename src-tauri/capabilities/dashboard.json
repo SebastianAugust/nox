@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "dashboard",
+  "description": "The dashboard: drag region, minimize, use the database",
+  "windows": ["dashboard"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "sql:default",
+    "sql:allow-execute"
+  ]
+}

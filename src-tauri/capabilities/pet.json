@@ -1,14 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main", "dashboard"],
+  "identifier": "pet",
+  "description": "The pet overlay: drag itself, use the database, show toasts",
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
-    "core:window:allow-minimize",
     "sql:default",
     "sql:allow-execute",
-    "notification:default"
+    "notification:allow-notify"
   ]
 }
