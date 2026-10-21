@@ -8,6 +8,7 @@
     "core:window:allow-start-dragging",
     "core:window:allow-minimize",
     "sql:default",
-    "sql:allow-execute"
+    "sql:allow-execute",
+    "notification:default"
   ]
 }

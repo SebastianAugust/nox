@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from "react";
 interface ChatInputProps {
   onSend: (message: string) => void;
   onClose: () => void;
+  /** The input gained or lost focus (also when the window does). */
+  onFocusChange?: (focused: boolean) => void;
   disabled: boolean;
 }
 
-export default function ChatInput({ onSend, onClose, disabled }: ChatInputProps) {
+export default function ChatInput({ onSend, onClose, onFocusChange, disabled }: ChatInputProps) {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -63,6 +65,8 @@ export default function ChatInput({ onSend, onClose, disabled }: ChatInputProps)
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
+        onFocus={() => onFocusChange?.(true)}
+        onBlur={() => onFocusChange?.(false)}
         disabled={disabled}
         placeholder={t("chat.placeholder")}
         spellCheck={false}

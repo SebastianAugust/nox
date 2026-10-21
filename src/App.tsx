@@ -14,6 +14,7 @@ import { saveCheckin, startCheckinScheduler, type Mood } from "./lib/checkin";
 import { recordInteraction, startFrictionDetector } from "./lib/friction";
 import { startRecapScheduler } from "./lib/recap";
 import { startReminderPoller } from "./lib/reminders";
+import { deliver, deliveryStateChanged, startDelivery, type Delivery } from "./lib/deliver";
 import {
   getPomodoroSnapshot,
   startPomodoroEngine,
@@ -130,14 +131,48 @@ function App() {
 
   // ── Schedulers ────────────────────────────────────────────────────────────
   // Each start* returns its own stop function, so React's dev double-invoke
-  // cannot leave a second timer running.
+  // cannot leave a second timer running. None of them touch the bubble: they
+  // hand messages to deliver(), which decides when (and whether) to show them.
+
+  // How each kind of delivered message looks once deliver() lets it through.
+  useEffect(
+    () =>
+      startDelivery(({ kind, text }: Delivery) => {
+        switch (kind) {
+          case "reminder":
+            clearRevert();
+            flashState("alert", 20000);
+            break;
+          case "checkin":
+            setPetState("alert");
+            setShowCheckin(true);
+            break;
+          case "friction":
+            // setOpen(true) resets the bubble, so the nudge is written after it.
+            setOpen(true);
+            setPetState("alert");
+            break;
+          case "recap":
+            clearRevert();
+            flashState("happy", 15000);
+            break;
+          case "system":
+            break;
+        }
+        setBubbleText(text);
+      }),
+    [flashState],
+  );
+
+  useEffect(() => deliveryStateChanged({ streaming: isStreaming }), [isStreaming]);
+  useEffect(() => {
+    if (!chatOpen) deliveryStateChanged({ chatFocused: false });
+  }, [chatOpen]);
 
   useEffect(
     () =>
       startCheckinScheduler(() => {
-        setBubbleText(t("pet.checkinAsk"));
-        setPetState("alert");
-        setShowCheckin(true);
+        void deliver({ kind: "checkin", text: t("pet.checkinAsk") });
       }),
     [],
   );
@@ -146,10 +181,7 @@ function App() {
     () =>
       startFrictionDetector(async () => {
         const name = await userName();
-        // setOpen(true) resets the bubble, so the nudge is written after it.
-        setOpen(true);
-        setPetState("alert");
-        setBubbleText(t("pet.friction", { name }));
+        await deliver({ kind: "friction", text: t("pet.friction", { name }) });
       }),
     [],
   );
@@ -158,26 +190,23 @@ function App() {
     () =>
       startRecapScheduler(async (recap) => {
         const name = await userName();
-        clearRevert();
-        flashState("happy", 15000);
-        setBubbleText(t("pet.recap", { summary: recap.summary, name }));
+        await deliver({ kind: "recap", text: t("pet.recap", { summary: recap.summary, name }) });
       }),
-    [flashState],
+    [],
   );
 
   // Reminders saved by /remind come back here when their time arrives.
   useEffect(
     () =>
       startReminderPoller((titles) => {
-        clearRevert();
-        flashState("alert", 20000);
-        setBubbleText(
-          t(titles.length === 1 ? "pet.reminder" : "pet.reminders", {
+        void deliver({
+          kind: "reminder",
+          text: t(titles.length === 1 ? "pet.reminder" : "pet.reminders", {
             titles: titles.join(" · "),
           }),
-        );
+        });
       }),
-    [flashState],
+    [],
   );
 
   // Ambient face: when nothing is going on, doze off at night and wake up
@@ -205,6 +234,7 @@ function App() {
 
   // The pet's face and bubble follow the pomodoro phase. Every phase change
   // lands somewhere definite, so no path can leave it stuck in focus mode.
+  // The bubble goes through deliver(), so it never cuts into a streamed reply.
   useEffect(() => {
     let prev: PomPhase = getPomodoroSnapshot().phase;
     return subscribePomodoro(({ phase }) => {
@@ -212,13 +242,13 @@ function App() {
       prev = phase;
       if (phase === "focus") {
         setPetState("thinking");
-        setBubbleText(t("pet.focus"));
+        void deliver({ kind: "system", text: t("pet.focus") });
       } else if (phase === "break") {
         flashState("excited", 15000);
-        setBubbleText(t("pet.break"));
+        void deliver({ kind: "system", text: t("pet.break") });
       } else {
         setPetState("idle");
-        setBubbleText(null);
+        void deliver({ kind: "system", text: t("pet.greeting") });
       }
     });
   }, [flashState]);
@@ -447,6 +477,7 @@ function App() {
         <ChatInput
           onSend={handleSend}
           onClose={() => setOpen(false)}
+          onFocusChange={(focused) => deliveryStateChanged({ chatFocused: focused })}
           disabled={isStreaming}
         />
       )}

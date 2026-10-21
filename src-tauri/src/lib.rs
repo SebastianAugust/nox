@@ -5,7 +5,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, PhysicalPosition, WebviewWindow, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, Manager, PhysicalPosition, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
 
 /// While the dashboard is open: whether the pet should be visible once it
@@ -52,9 +52,15 @@ fn position_window(window: &WebviewWindow) {
     position_window_sized(window, WIN_W, WIN_H);
 }
 
+/// Show the pet and tell it, so held messages and missed reminders come out.
+fn show_pet(window: &WebviewWindow) {
+    let _ = window.show();
+    let _ = window.emit("pet:shown", ());
+}
+
 /// Show the window at its docked position and focus it.
 fn reveal_window(window: &WebviewWindow) {
-    let _ = window.show();
+    show_pet(window);
     let _ = window.set_focus();
     position_window(window);
 }
@@ -121,10 +127,10 @@ fn hide_dashboard(app: &AppHandle) {
     if let Some(dash_win) = app.get_webview_window("dashboard") {
         let _ = dash_win.hide();
     }
-    let show_pet = pet_after_dashboard(app).take().unwrap_or(false);
-    if show_pet {
+    let pet_wanted = pet_after_dashboard(app).take().unwrap_or(false);
+    if pet_wanted {
         if let Some(main_win) = app.get_webview_window("main") {
-            let _ = main_win.show();
+            show_pet(&main_win);
         }
     }
 }
@@ -158,6 +164,7 @@ pub fn run() {
         // Migrations run once at startup for the preloaded database (see
         // `plugins.sql.preload` in tauri.conf.json), before any window queries.
         // Never edit a released migration; add the next number instead.
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:nox.db", migrations())
