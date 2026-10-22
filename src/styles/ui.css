@@ -80,15 +80,17 @@ button:disabled {
   background: var(--sky);
 }
 
+/* Compact headers keep the moon below the top bar's buttons. */
 .night-sky--compact .sky-moon {
-  top: 20px;
+  right: 16%;
+  top: 74px;
   width: 48px;
   height: 48px;
 }
 
 .night-sky--compact .sky-moon-shadow {
-  right: calc(8% - 11px);
-  top: 13px;
+  right: calc(16% - 11px);
+  top: 67px;
   width: 45px;
   height: 45px;
 }

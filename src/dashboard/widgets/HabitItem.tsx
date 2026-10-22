@@ -1,113 +1,73 @@
 import { useState } from "react";
 import { t } from "../../lib/i18n";
-import { rowBorder } from "../../styles/shared";
+import { habitStreak, type HabitLogMap } from "../../lib/streaks";
+import { ChunkyButton, IconButton } from "../../components/ui/controls";
+import WeekFootprints from "./WeekFootprints";
 
 export type HabitRow = { id: number; name: string; completed: number };
 
-/** One habit row. Delete appears on hover, and right-click also removes it. */
+/**
+ * One habit as a card: today's toggle, its streak and best, and the last
+ * seven days. Delete asks first; right-click opens the same confirm.
+ */
 export default function HabitItem({
   habit,
-  last,
+  logs,
+  today,
   onToggle,
   onDelete,
 }: {
   habit: HabitRow;
-  last: boolean;
+  logs: HabitLogMap;
+  today: string;
   onToggle: () => void;
   onDelete: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const done = habit.completed === 1;
+  const { current, best } = habitStreak(logs, habit.id, today);
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => {
-        setHovered(false);
-        setConfirming(false);
-      }}
+    <article
+      className="card habit-card"
+      aria-label={habit.name}
       onContextMenu={(e) => {
         e.preventDefault();
         setConfirming(true);
       }}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "8px 0",
-        ...rowBorder(last),
-      }}
+      onMouseLeave={() => setConfirming(false)}
     >
-      <div
-        onClick={onToggle}
-        title={t("habits.toggle")}
-        style={{
-          width: 16,
-          height: 16,
-          borderRadius: 4,
-          flexShrink: 0,
-          cursor: "pointer",
-          background: done ? "#00e5a0" : "transparent",
-          border: done ? "none" : "0.5px solid rgba(255,255,255,0.15)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {done && (
-          <i
-            className="ti ti-check"
-            style={{ fontSize: 11, color: "#080a0d" }}
-            aria-hidden="true"
-          />
+      <div className="habit-card__row">
+        <button
+          type="button"
+          aria-pressed={done}
+          className={`habit-toggle habit-toggle--grow${done ? " habit-toggle--done" : ""}`}
+          onClick={onToggle}
+        >
+          <span className="habit-toggle__box" aria-hidden="true">
+            {done && <i className="ti ti-check" />}
+          </span>
+          <span className="habit-toggle__name">{habit.name}</span>
+        </button>
+        {confirming ? (
+          <ChunkyButton size="sm" variant="danger" onClick={onDelete} autoFocus onBlur={() => setConfirming(false)}>
+            {t("habits.confirmDelete")}
+          </ChunkyButton>
+        ) : (
+          <IconButton label={t("habits.delete")} onClick={() => setConfirming(true)} className="icon-btn--danger">
+            <i className="ti ti-trash" aria-hidden="true" />
+          </IconButton>
         )}
       </div>
-      <span
-        onClick={onToggle}
-        style={{
-          fontSize: 13,
-          flex: 1,
-          cursor: "pointer",
-          color: done ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)",
-        }}
-      >
-        {habit.name}
-      </span>
-
-      {confirming ? (
-        <button
-          onClick={onDelete}
-          style={{
-            fontSize: 11,
-            padding: "2px 8px",
-            borderRadius: 6,
-            background: "rgba(239,68,68,0.15)",
-            border: "0.5px solid rgba(239,68,68,0.3)",
-            color: "#f87171",
-            cursor: "pointer",
-            fontFamily: "inherit",
-          }}
-        >
-          {t("habits.confirmDelete")}
-        </button>
-      ) : (
-        <button
-          onClick={() => setConfirming(true)}
-          title={t("habits.delete")}
-          style={{
-            background: "none",
-            border: "none",
-            color: "rgba(255,255,255,0.3)",
-            fontSize: 12,
-            cursor: "pointer",
-            padding: "0 2px",
-            visibility: hovered ? "visible" : "hidden",
-          }}
-        >
-          <i className="ti ti-trash" aria-hidden="true" />
-        </button>
-      )}
-    </div>
+      <div className="habit-card__stats">
+        <span>
+          <span className="pixel habit-card__num">{current}</span> {t("habits.streak")}
+        </span>
+        <span>
+          <span className="pixel habit-card__num">{best}</span> {t("habits.best")}
+        </span>
+      </div>
+      <WeekFootprints logs={logs} today={today} habitId={habit.id} />
+    </article>
   );
 }
