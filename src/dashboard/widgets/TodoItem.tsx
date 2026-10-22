@@ -1,100 +1,49 @@
-import { useState } from "react";
 import { getTodosFiltered } from "../../lib/db-helpers";
 import { t } from "../../lib/i18n";
-import { rowBorder } from "../../styles/shared";
-import { formatDue } from "../format";
+import { ClawMarks } from "../../components/deco/Deco";
+import { IconButton, Tag } from "../../components/ui/controls";
+import { dueInfo } from "../format";
 
-export type TodoRow = Awaited<ReturnType<typeof getTodosFiltered>>[number];
+export type TodoRow = Awaited<ReturnType<typeof getTodosFiltered>>[number] & { context?: string };
 
-/** One todo row; delete only appears on hover so the list stays quiet. */
+/**
+ * One todo. The whole row is the checkbox's label, so clicking the title
+ * ticks it. Overdue rows are danger-styled with claw marks and a tag.
+ */
 export default function TodoItem({
   todo,
-  last,
   onToggle,
   onDelete,
 }: {
   todo: TodoRow;
-  last: boolean;
   onToggle: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
   const done = todo.status === "done";
-  const due = todo.due_date ? formatDue(todo.due_date) : null;
+  const due = todo.due_date ? dueInfo(todo.due_date) : null;
+  const overdue = !done && due?.kind === "overdue";
+  const id = `todo-${todo.id}`;
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 9,
-        padding: "8px 0",
-        ...rowBorder(last),
-      }}
-    >
-      <div
-        onClick={onToggle}
-        title={t("todos.toggle")}
-        style={{
-          width: 15,
-          height: 15,
-          borderRadius: 4,
-          flexShrink: 0,
-          marginTop: 1,
-          cursor: "pointer",
-          background: done ? "#00e5a0" : "transparent",
-          border: done ? "none" : "0.5px solid rgba(255,255,255,0.2)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {done && (
-          <i
-            className="ti ti-check"
-            style={{ fontSize: 10, color: "#080a0d" }}
-            aria-hidden="true"
-          />
+    <div className={`todo${overdue ? " todo--overdue" : ""}${done ? " todo--done" : ""}`}>
+      {overdue && <ClawMarks />}
+      <label htmlFor={id} className="todo__label">
+        <input id={id} type="checkbox" className="check" checked={done} onChange={onToggle} />
+        {overdue ? (
+          <Tag tone="overdue">{t("tag.overdue")}</Tag>
+        ) : todo.notes === "reminder" ? (
+          <Tag tone="neutral">{t("tag.reminder")}</Tag>
+        ) : (
+          todo.context === "personal" && <Tag tone="personal">{t("tag.personal")}</Tag>
         )}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          onClick={onToggle}
-          style={{
-            fontSize: 12,
-            cursor: "pointer",
-            color: done ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.75)",
-            textDecoration: done ? "line-through" : "none",
-            wordBreak: "break-word",
-          }}
-        >
-          {todo.title}
-        </div>
-        {due && (
-          <div style={{ fontSize: 10, color: due.color, marginTop: 2 }}>
-            {todo.notes === "reminder" ? t("todos.reminder") : ""}
-            {due.text}
-          </div>
-        )}
-      </div>
-      <button
-        onClick={onDelete}
-        title={t("todos.delete")}
-        style={{
-          background: "none",
-          border: "none",
-          color: "rgba(248,113,113,0.6)",
-          fontSize: 12,
-          cursor: "pointer",
-          flexShrink: 0,
-          padding: "0 2px",
-          visibility: hovered ? "visible" : "hidden",
-        }}
-      >
-        <i className="ti ti-trash" aria-hidden="true" />
-      </button>
+        <span className="todo__title">{todo.title}</span>
+        {due && !done && <span className={`todo__due todo__due--${due.kind}`}>{due.text}</span>}
+      </label>
+      {onDelete && (
+        <IconButton label={t("todos.delete")} onClick={onDelete} className="icon-btn--danger todo__delete">
+          <i className="ti ti-trash" aria-hidden="true" />
+        </IconButton>
+      )}
     </div>
   );
 }

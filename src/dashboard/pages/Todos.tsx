@@ -82,11 +82,10 @@ export default function PageTodos() {
             {t(filter === "pending" ? "todos.emptyActive" : "todos.empty")}
           </div>
         )}
-        {todos.map((todo, i) => (
+        {todos.map((todo) => (
           <TodoItem
             key={todo.id}
             todo={todo}
-            last={i === todos.length - 1}
             onToggle={() => void handleToggle(todo).catch(console.error)}
             onDelete={() => void handleDelete(todo).catch(console.error)}
           />

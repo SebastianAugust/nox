@@ -148,3 +148,524 @@
   flex-direction: column;
   gap: var(--sp-9);
 }
+
+.muted {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+}
+
+.empty-line {
+  margin: 0;
+  padding: var(--sp-3) 0;
+  color: var(--text-dim);
+  font-size: var(--fs-md);
+}
+
+.field-error {
+  margin: var(--sp-2) 0 0;
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
+}
+
+.card__title--sm {
+  font-size: var(--fs-xl);
+}
+
+/* ── Home hero ── */
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-14);
+}
+
+.perch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: none;
+}
+
+/* The real sprite at 1.4x; pixelated scaling keeps it crisp. */
+.perch__pet {
+  inline-size: 134px;
+  block-size: 134px;
+  pointer-events: none;
+}
+
+.perch__pet > * {
+  transform: scale(1.4);
+  transform-origin: top left;
+}
+
+.perch__rock {
+  inline-size: 210px;
+  block-size: 36px;
+  margin-top: calc(-1 * var(--sp-3));
+  border-radius: 60px 80px 0 0;
+  background-color: var(--scale-line);
+  background-image: radial-gradient(circle at 50% 100%, transparent 7px, var(--scale-tint) 8px, transparent 9px);
+  background-size: 18px 10px;
+}
+
+.hero__text {
+  flex: 1 1 400px;
+  min-width: 0;
+  padding-bottom: var(--sp-10);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.hero__text .dialog-wrap {
+  max-width: 640px;
+}
+
+/* ── Summary row ── */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-6);
+}
+
+/* ── Home grid: Today leads, focus and habits stack beside it ── */
+
+.home-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-9);
+}
+
+.home-grid__lead {
+  flex: 3 1 380px;
+}
+
+.home-grid__side {
+  flex: 2 1 280px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-9);
+}
+
+/* ── Todo rows ── */
+
+.todo-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.todo {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-right: var(--sp-3);
+  border-radius: var(--r-row);
+  background: var(--surface-2);
+  border: 2px solid transparent;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.todo:hover {
+  border-color: var(--line);
+}
+
+.todo--overdue {
+  background: var(--danger-bg);
+  border-color: var(--danger-line);
+}
+
+.todo--overdue:hover {
+  border-color: var(--danger);
+}
+
+.todo__label {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: var(--sp-7);
+  cursor: pointer;
+}
+
+.todo--overdue .todo__label {
+  padding-block: var(--sp-8);
+}
+
+.check {
+  flex: none;
+  inline-size: var(--check);
+  block-size: var(--check);
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.todo__title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-body);
+  overflow-wrap: anywhere;
+}
+
+.todo--overdue .todo__title {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-strong);
+}
+
+.todo--done .todo__title {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+
+.todo__due {
+  flex: none;
+  font-family: var(--font-pixel);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+
+.todo__due--overdue {
+  color: var(--danger-text);
+}
+
+.todo__due--today {
+  color: var(--warn-text);
+}
+
+.todo__delete {
+  position: relative;
+  opacity: 0;
+}
+
+.todo:hover .todo__delete,
+.todo__delete:focus-visible {
+  opacity: 1;
+}
+
+.add-todo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  block-size: 48px;
+  padding: 0 var(--sp-8);
+  border-radius: var(--r-row);
+  border: 2px dashed var(--line-strong);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.add-todo:focus-within {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+.add-todo__plus {
+  flex: none;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.add-todo__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-body);
+}
+
+/* The field's mint border is its focus indicator. */
+.add-todo__input:focus-visible {
+  box-shadow: none;
+}
+
+/* ── Focus ring ── */
+
+.timer-ring {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.timer-ring svg {
+  display: block;
+  transform: rotate(-90deg);
+}
+
+.timer-ring__track {
+  fill: var(--bg);
+  stroke: var(--line);
+}
+
+.timer-ring__progress {
+  fill: none;
+  stroke: var(--line);
+  stroke-linecap: round;
+  transition:
+    stroke-dashoffset var(--dur-slow) linear,
+    stroke var(--dur-slow) var(--ease-out);
+}
+
+.timer-ring--running .timer-ring__progress {
+  stroke: var(--bolt);
+}
+
+.timer-ring--running svg {
+  filter: drop-shadow(0 0 8px var(--bolt-glow));
+}
+
+.timer-ring__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+}
+
+.timer-ring__time {
+  font-family: var(--font-pixel);
+  font-size: var(--fs-3xl);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-ring--lg .timer-ring__time {
+  font-size: var(--fs-timer);
+}
+
+.timer-ring__label {
+  font-family: var(--font-pixel);
+  font-size: var(--fs-md);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-tag);
+}
+
+.timer-ring--running .timer-ring__label,
+.focusing {
+  color: var(--bolt);
+}
+
+.focusing {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-strong);
+}
+
+.focus-card {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: var(--sp-10) var(--sp-10) var(--sp-10) var(--sp-12);
+}
+
+.focus-card__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding-left: var(--sp-4);
+  min-width: 0;
+}
+
+/* ── Habits ── */
+
+.habits-card {
+  padding: var(--sp-10);
+  gap: var(--sp-6);
+}
+
+.habits-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-7);
+}
+
+.habit-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  min-block-size: 50px;
+  padding: var(--sp-3) var(--sp-7);
+  border-radius: var(--r-control);
+  border: 2px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-body);
+  text-align: left;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.habit-toggle:hover {
+  border-color: var(--line-strong);
+}
+
+.habit-toggle--done {
+  border-color: var(--accent-shadow);
+}
+
+.habit-toggle__box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  inline-size: var(--check);
+  block-size: var(--check);
+  border-radius: var(--r-small);
+  border: 2px solid var(--line-strong);
+  color: var(--accent-ink);
+  font-size: var(--fs-md);
+}
+
+.habit-toggle--done .habit-toggle__box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.habit-toggle__name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.habit-toggle__meta {
+  flex: none;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+.week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--sp-3);
+  text-align: center;
+}
+
+.week__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.week__initial {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-strong);
+  color: var(--text-dim);
+}
+
+.week__initial--today {
+  color: var(--accent);
+}
+
+/* ── Next 7 days ── */
+
+.days {
+  position: relative;
+  padding-top: var(--sp-2);
+}
+
+.days__line {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 19px;
+  border-top: 3px dashed var(--line-strong);
+}
+
+.days__list {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--sp-3);
+  text-align: center;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.day .tag {
+  margin: 7px 0;
+  border: 2px solid var(--surface);
+  font-size: var(--fs-2xs);
+}
+
+.day__node {
+  inline-size: 18px;
+  block-size: 18px;
+  margin: var(--sp-3) 0;
+  border-radius: var(--r-pill);
+  background: var(--line);
+}
+
+.day__node--soon,
+.day__node--busy {
+  inline-size: 30px;
+  block-size: 30px;
+  margin: 0;
+  border: 4px solid var(--surface);
+}
+
+.day__node--soon {
+  background: var(--warn);
+}
+
+.day__node--busy {
+  background: var(--accent);
+}
+
+.day__label {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-body);
+  color: var(--text-dim);
+}
+
+.day__label--busy {
+  color: var(--text);
+  font-weight: var(--fw-strong);
+}
+
+.day__item {
+  max-inline-size: 100%;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-body);
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.day__item--overdue {
+  color: var(--danger-text);
+}
+
+.day__item--soon {
+  color: var(--warn-text);
+}

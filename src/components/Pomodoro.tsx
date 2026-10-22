@@ -13,94 +13,24 @@ export function formatTime(totalSeconds: number): string {
   return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 }
 
-/**
- * Circular countdown. The ring drains as the phase runs down; `total` is the
- * length of the *current* phase, so work and break both start from a full ring.
- */
-function ProgressRing({
-  seconds,
-  total,
-  state,
-}: {
+export type PomodoroView = {
+  phase: PomPhase;
+  /** Seconds left in the current phase (the full focus length while idle). */
   seconds: number;
+  /** Length of the current phase, so focus and break both start full. */
   total: number;
-  state: PomPhase;
-}) {
-  const RADIUS = 54;
-  const circumference = 2 * Math.PI * RADIUS;
-  const progress = total > 0 ? Math.min(1, Math.max(0, seconds / total)) : 0;
-  const color =
-    state === "focus" ? "#00e5a0" : state === "break" ? "#60a5fa" : "rgba(255,255,255,0.12)";
-
-  return (
-    <div style={{ position: "relative", width: 140, height: 140, margin: "0 auto 14px" }}>
-      <svg width="140" height="140" style={{ transform: "rotate(-90deg)", display: "block" }}>
-        <circle
-          cx="70"
-          cy="70"
-          r={RADIUS}
-          fill="none"
-          stroke="rgba(255,255,255,0.06)"
-          strokeWidth="6"
-        />
-        <circle
-          cx="70"
-          cy="70"
-          r={RADIUS}
-          fill="none"
-          stroke={color}
-          strokeWidth="6"
-          strokeDasharray={circumference}
-          strokeDashoffset={circumference * (1 - progress)}
-          strokeLinecap="round"
-          style={{
-            // Only ease between ticks while running; a reset should snap.
-            transition:
-              state === "idle"
-                ? "stroke 0.3s ease"
-                : "stroke-dashoffset 0.3s linear, stroke 0.3s ease",
-          }}
-        />
-      </svg>
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          style={{
-            fontSize: 28,
-            fontWeight: 500,
-            fontVariantNumeric: "tabular-nums",
-            color: "rgba(255,255,255,0.85)",
-          }}
-        >
-          {formatTime(seconds)}
-        </div>
-        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
-          {t(state === "focus" ? "pom.ringFocus" : state === "break" ? "pom.ringBreak" : "pom.ringReady")}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type Props = {
-  /** Fires on every state snapshot, so callers can refresh their session list. */
-  onSnapshot?: (s: PomSnapshot) => void;
+  focusMinutes: number;
+  sessionsToday: number;
+  send: (type: PomCommand["type"]) => void;
 };
 
 /**
  * Pure view + remote control. The timer itself runs in the pet window
- * (lib/pomodoroEngine.ts); this renders its latest snapshot and sends commands,
- * so switching pages or closing the dashboard never touches a running session.
+ * (lib/pomodoroEngine.ts); this follows its latest snapshot and sends
+ * commands, so switching pages or closing the dashboard never touches a
+ * running session.
  */
-export function Pomodoro({ onSnapshot }: Props) {
+export function usePomodoro(onSnapshot?: (s: PomSnapshot) => void): PomodoroView {
   const [snap, setSnap] = useState<PomSnapshot | null>(null);
   const [now, setNow] = useState(Date.now());
   const [sessionsToday, setSessionsToday] = useState(0);
@@ -133,70 +63,119 @@ export function Pomodoro({ onSnapshot }: Props) {
     };
   }, [refreshSessions]);
 
-  const state: PomPhase = snap?.phase ?? "idle";
+  const phase: PomPhase = snap?.phase ?? "idle";
 
   // Only the display ticks here; the deadline lives in the pet window.
   useEffect(() => {
-    if (state === "idle") return;
+    if (phase === "idle") return;
     const handle = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(handle);
-  }, [state]);
+  }, [phase]);
 
   const focusSec = snap?.focusSec ?? DEFAULT_WORK_MINUTES * 60;
   const breakSec = snap?.breakSec ?? DEFAULT_BREAK_MINUTES * 60;
-  const seconds =
-    snap?.endsAt != null
-      ? Math.max(0, Math.ceil((snap.endsAt - now) / 1000))
-      : focusSec;
+  const seconds = snap?.endsAt != null ? Math.max(0, Math.ceil((snap.endsAt - now) / 1000)) : focusSec;
 
-  const send = (type: PomCommand["type"]) =>
-    emit("pomodoro:cmd", { type } satisfies PomCommand).catch(console.error);
-
-  const label = t(
-    state === "idle" ? "pom.ready" : state === "focus" ? "pom.focusTime" : "pom.breakTime",
+  const send = useCallback(
+    (type: PomCommand["type"]) => emit("pomodoro:cmd", { type } satisfies PomCommand).catch(console.error),
+    [],
   );
 
+  return {
+    phase,
+    seconds,
+    total: phase === "break" ? breakSec : focusSec,
+    focusMinutes: Math.round(focusSec / 60),
+    sessionsToday,
+    send,
+  };
+}
+
+/** Status word under the timer: Ready / Focusing / Break. */
+export function phaseLabel(phase: PomPhase): string {
+  return t(phase === "focus" ? "pom.ringFocus" : phase === "break" ? "pom.ringBreak" : "pom.ringReady");
+}
+
+/**
+ * Round countdown. The ring drains as the phase runs down; it is lightning
+ * blue with a soft glow while running and a quiet line color when idle.
+ */
+export function FocusRing({
+  seconds,
+  total,
+  phase,
+  size = "md",
+  showLabel = size === "lg",
+}: {
+  seconds: number;
+  total: number;
+  phase: PomPhase;
+  size?: "md" | "lg";
+  showLabel?: boolean;
+}) {
+  const box = size === "lg" ? 232 : 108;
+  const stroke = size === "lg" ? 10 : 6;
+  const radius = (box - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const running = phase !== "idle";
+  const progress = running && total > 0 ? Math.min(1, Math.max(0, seconds / total)) : 1;
+
   return (
-    <div style={{ textAlign: "center" }}>
-      <ProgressRing
-        seconds={seconds}
-        total={state === "break" ? breakSec : focusSec}
-        state={state}
-      />
-      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 16 }}>
-        {label} · {t(sessionsToday === 1 ? "pom.session" : "pom.sessions", { count: sessionsToday })}
+    <div
+      className={`timer-ring timer-ring--${size}${running ? " timer-ring--running" : ""}`}
+      role="timer"
+      aria-label={`${phaseLabel(phase)} ${formatTime(seconds)}`}
+    >
+      <svg width={box} height={box} viewBox={`0 0 ${box} ${box}`} aria-hidden="true">
+        <circle className="timer-ring__track" cx={box / 2} cy={box / 2} r={radius} strokeWidth={stroke} />
+        <circle
+          className="timer-ring__progress"
+          cx={box / 2}
+          cy={box / 2}
+          r={radius}
+          strokeWidth={stroke}
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - progress)}
+        />
+      </svg>
+      <div className="timer-ring__center" aria-hidden="true">
+        <span className="timer-ring__time">{formatTime(seconds)}</span>
+        {showLabel && <span className="timer-ring__label">{phaseLabel(phase)}</span>}
       </div>
-      <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-        {state === "idle" ? (
-          <button
-            onClick={() => send("start")}
-            style={{
-              padding: "7px 20px",
-              borderRadius: 8,
-              background: "#00e5a0",
-              border: "none",
-              color: "#080a0d",
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: "pointer",
-            }}
-          >
+    </div>
+  );
+}
+
+type Props = {
+  /** Fires on every state snapshot, so callers can refresh their session list. */
+  onSnapshot?: (s: PomSnapshot) => void;
+};
+
+/** The Focus page's timer block: ring with wings, session count, controls. */
+export function Pomodoro({ onSnapshot }: Props) {
+  const pom = usePomodoro(onSnapshot);
+  const { phase } = pom;
+
+  const label = t(phase === "idle" ? "pom.ready" : phase === "focus" ? "pom.focusTime" : "pom.breakTime");
+
+  return (
+    <div className="pomodoro">
+      <FocusRing seconds={pom.seconds} total={pom.total} phase={phase} size="lg" />
+      <div className="pomodoro__status">
+        {label} · {t(pom.sessionsToday === 1 ? "pom.session" : "pom.sessions", { count: pom.sessionsToday })}
+      </div>
+      <div className="pomodoro__controls">
+        {phase === "idle" ? (
+          <button type="button" className="chunky chunky--primary chunky--lg" onClick={() => pom.send("start")}>
             {t("pom.start")}
           </button>
         ) : (
           <button
-            onClick={() => send(state === "focus" ? "stop" : "skip")}
-            style={{
-              padding: "7px 20px",
-              borderRadius: 8,
-              background: "rgba(239,68,68,0.15)",
-              border: "0.5px solid rgba(239,68,68,0.3)",
-              color: "#f87171",
-              fontSize: 12,
-              cursor: "pointer",
-            }}
+            type="button"
+            className="chunky chunky--secondary chunky--lg"
+            onClick={() => pom.send(phase === "focus" ? "stop" : "skip")}
           >
-            {t(state === "focus" ? "pom.stop" : "pom.skip")}
+            {t(phase === "focus" ? "pom.stop" : "pom.skip")}
           </button>
         )}
       </div>
