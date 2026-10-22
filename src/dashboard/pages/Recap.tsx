@@ -1,101 +1,69 @@
 import { useEffect, useState } from "react";
-import { getRecentRecaps } from "../../lib/db-helpers";
+import { getRecentRecaps, getSetting } from "../../lib/db-helpers";
 import { locale, t } from "../../lib/i18n";
-import { card, emptyText } from "../../styles/shared";
+import { MoonStars } from "../../components/deco/Deco";
+import { Tag } from "../../components/ui/controls";
+
+type Recap = Awaited<ReturnType<typeof getRecentRecaps>>[number];
 
 /** Day recaps, newest first. */
 export default function PageRecap() {
-  const [recaps, setRecaps] = useState<Awaited<ReturnType<typeof getRecentRecaps>>>([]);
+  const [recaps, setRecaps] = useState<Recap[]>([]);
+  const [recapTime, setRecapTime] = useState("22:00");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    getRecentRecaps(14)
-      .then((r) => {
+    Promise.all([getRecentRecaps(14), getSetting("recap_time")])
+      .then(([r, time]) => {
         setRecaps(r);
+        if (time) setRecapTime(time);
         setLoaded(true);
       })
       .catch(console.error);
   }, []);
 
-  if (!loaded) return <div style={emptyText}>{t("common.loading")}</div>;
+  if (!loaded) return <p className="empty-line">{t("common.loading")}</p>;
 
   if (recaps.length === 0) {
     return (
-      <div
-        style={{
-          textAlign: "center",
-          padding: "40px 0",
-          color: "rgba(255,255,255,0.2)",
-          fontSize: 13,
-        }}
-      >
-        {t("recap.empty")}
+      <div className="empty-state">
+        <MoonStars />
+        <p>{t("recap.empty", { time: recapTime })}</p>
       </div>
     );
   }
 
-  const tile = (value: string, label: string, color: string) => (
-    <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 6, padding: "6px 9px" }}>
-      <div style={{ fontSize: 14, fontWeight: 500, color }}>{value}</div>
-      <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>{label}</div>
-    </div>
-  );
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div className="recap-list">
       {recaps.map((r) => {
         const [y, m, d] = r.date.split("-").map(Number);
+        const date = new Date(y, m - 1, d);
         return (
-          <div key={r.date} style={{ ...card, padding: "12px 14px" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 8,
-              }}
-            >
-              <div style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.75)" }}>
-                {new Date(y, m - 1, d).toLocaleDateString(locale(), {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "short",
-                })}
-              </div>
-              {r.mood && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    padding: "2px 8px",
-                    borderRadius: 20,
-                    background: "rgba(0,229,160,0.1)",
-                    color: "#00e5a0",
-                  }}
-                >
-                  {r.mood}
-                </span>
-              )}
+          <article key={r.date} className="card recap" aria-label={date.toLocaleDateString(locale(), { dateStyle: "full" })}>
+            <div className="recap__head">
+              <span className="pixel recap__date">
+                {date.toLocaleDateString(locale(), { weekday: "short", day: "numeric", month: "short" })}
+              </span>
+              {r.mood && <Tag tone="neutral">{r.mood}</Tag>}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-              {tile(
-                `${r.todos_completed}/${r.todos_total}`,
-                t("recap.tasks"),
-                r.todos_completed > 0 ? "#00e5a0" : "rgba(255,255,255,0.5)",
-              )}
-              {tile(
-                String(r.pomodoro_sessions),
-                t("recap.pomodoros"),
-                r.pomodoro_sessions > 0 ? "#60a5fa" : "rgba(255,255,255,0.5)",
-              )}
-              {tile(
-                `${r.habits_completed}/${r.habits_total}`,
-                t("recap.habits"),
-                r.habits_completed > 0 ? "#a78bfa" : "rgba(255,255,255,0.5)",
-              )}
+            {r.summary && <p className="recap__summary">{r.summary}</p>}
+            <div className="chips">
+              <Chip value={`${r.todos_completed}/${r.todos_total}`} label={t("recap.tasks")} done={r.todos_completed > 0} />
+              <Chip value={String(r.pomodoro_sessions)} label={t("recap.pomodoros")} done={r.pomodoro_sessions > 0} />
+              <Chip value={`${r.habits_completed}/${r.habits_total}`} label={t("recap.habits")} done={r.habits_completed > 0} />
             </div>
-          </div>
+          </article>
         );
       })}
     </div>
+  );
+}
+
+function Chip({ value, label, done }: { value: string; label: string; done: boolean }) {
+  return (
+    <span className={`chip${done ? " chip--done" : ""}`}>
+      <span className="pixel chip__value">{value}</span>
+      {label}
+    </span>
   );
 }

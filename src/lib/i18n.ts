@@ -83,7 +83,7 @@ const en = {
   "sub.pomodoro": "Focus without distractions",
   "sub.todos": "All tasks",
   "sub.recap": "Daily history",
-  "sub.integrations": "Manage connections",
+  "sub.integrations": "Services Nox will connect to",
   "sub.settings": "Nox preferences",
 
   // ── Home ──
@@ -171,18 +171,20 @@ const en = {
 
   // ── Recap ──
   "common.loading": "Loading…",
-  "recap.empty": "No recaps yet. The first one lands at your recap time.",
+  "recap.empty": "No recaps yet. The first one arrives at {time}.",
   "recap.tasks": "tasks",
-  "recap.pomodoros": "pomodoros",
+  "recap.pomodoros": "focus sessions",
   "recap.habits": "habits",
 
   // ── Integrations ──
-  "int.services": "services",
-  "int.noToken": "no token needed, just enable",
-  "int.on": "on",
-  "int.enable": "enable",
-  "int.setup": "setup",
-  "int.comingSoon": "Coming soon. This integration will be set up here.",
+  "int.lead": "Connections that will feed Nox. None of them is built yet; each one shows its status here.",
+  "int.planned": "Planned",
+  "int.connected": "Connected",
+  "int.notConnected": "Not connected",
+  "int.notion": "Assignments and deadlines from your Notion database, next to your todos.",
+  "int.calendar": "Today's events, so Nox knows when you are busy.",
+  "int.music": "Focus music that starts with a session.",
+  "int.weather": "Rain warnings for your location. No account needed.",
 
   // ── Settings ──
   "set.general": "general",
@@ -278,7 +280,7 @@ const id: Record<I18nKey, string> = {
   "sub.pomodoro": "Fokus tanpa gangguan",
   "sub.todos": "Semua tugas",
   "sub.recap": "Riwayat harian",
-  "sub.integrations": "Kelola koneksi",
+  "sub.integrations": "Layanan yang akan terhubung ke Nox",
   "sub.settings": "Preferensi Nox",
 
   "home.greet.morning": "Pagi, {name}",
@@ -361,17 +363,19 @@ const id: Record<I18nKey, string> = {
   "reminders.delete": "Hapus pengingat",
 
   "common.loading": "Memuat…",
-  "recap.empty": "Belum ada rekap. Yang pertama muncul di jam rekapmu.",
+  "recap.empty": "Belum ada rekap. Yang pertama datang pukul {time}.",
   "recap.tasks": "tugas",
-  "recap.pomodoros": "pomodoro",
+  "recap.pomodoros": "sesi fokus",
   "recap.habits": "kebiasaan",
 
-  "int.services": "layanan",
-  "int.noToken": "tidak perlu token, cukup aktifkan",
-  "int.on": "aktif",
-  "int.enable": "aktifkan",
-  "int.setup": "atur",
-  "int.comingSoon": "Segera hadir. Integrasi ini akan diatur di sini.",
+  "int.lead": "Koneksi yang nanti akan mengisi Nox. Belum ada yang dibuat; statusnya tampil di sini.",
+  "int.planned": "Direncanakan",
+  "int.connected": "Terhubung",
+  "int.notConnected": "Belum terhubung",
+  "int.notion": "Tugas kuliah dan tenggat dari database Notion, di samping daftar tugasmu.",
+  "int.calendar": "Acara hari ini, supaya Nox tahu kapan kamu sibuk.",
+  "int.music": "Musik fokus yang mulai bersama sesi.",
+  "int.weather": "Peringatan hujan untuk lokasimu. Tanpa akun.",
 
   "set.general": "umum",
   "set.features": "fitur",
