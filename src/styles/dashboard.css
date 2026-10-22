@@ -947,3 +947,145 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* ── Settings ── */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4) var(--sp-8);
+  padding: var(--sp-6) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.setting:last-child {
+  border-bottom: 0;
+}
+
+.setting__text {
+  flex: 1 1 220px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.setting__label {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-body);
+}
+
+.setting__hint {
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.setting__control {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* Bordered fields: they look editable before they are clicked. */
+.field {
+  inline-size: 260px;
+  max-inline-size: 100%;
+  block-size: var(--control-md);
+  padding: 0 var(--sp-6);
+  border-radius: var(--r-small);
+  border: 2px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-body);
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.field:hover {
+  border-color: var(--text-dim);
+}
+
+/* Text fields show focus with a mint border; selects keep the blue ring. */
+input.field:focus {
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+.field--short {
+  inline-size: 140px;
+}
+
+.field--select {
+  cursor: pointer;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+}
+
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  block-size: var(--control-md);
+  padding: 0 var(--sp-7) 0 var(--sp-4);
+  border-radius: var(--r-pill);
+  border: 2px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-body);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.swatch:hover {
+  border-color: var(--line-strong);
+}
+
+.swatch--on {
+  border-color: var(--text);
+}
+
+.swatch__dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--sp-10);
+  block-size: var(--sp-10);
+  border-radius: var(--r-pill);
+  color: var(--void);
+  font-size: var(--fs-xs);
+}
+
+.swatch__dot--electric {
+  background: var(--bolt-electric);
+}
+
+.swatch__dot--cyan {
+  background: var(--bolt-cyan);
+}
+
+.swatch__dot--cobalt {
+  background: var(--bolt-cobalt);
+}
+
+.swatch__dot--ice {
+  background: var(--bolt-ice);
+}
+
+.page-end {
+  padding-top: var(--sp-2);
+  text-align: center;
+}

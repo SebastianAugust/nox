@@ -3,11 +3,13 @@ import { emit } from "@tauri-apps/api/event";
 import { getSettings } from "../../lib/db";
 import { setSetting } from "../../lib/db-helpers";
 import { t } from "../../lib/i18n";
-import { card, emptyText, sectionLabel } from "../../styles/shared";
+import { BOLT_PRESETS } from "../../lib/theme";
+import { useReducedMotion } from "../../components/deco/NightSky";
+import { Card, Toggle } from "../../components/ui/controls";
 import { NAV_ITEMS } from "../nav";
-import { EditableValue, SettingRow, Toggle } from "../widgets/SettingControls";
+import { SettingRow, TextSetting } from "../widgets/SettingControls";
 
-export const TEXT_SETTINGS = [
+const TEXT_SETTINGS = [
   { key: "user_name", label: "set.userName" },
   { key: "user_location", label: "set.location" },
   { key: "ollama_model", label: "set.model" },
@@ -16,18 +18,18 @@ export const TEXT_SETTINGS = [
 
 // Daily briefing (toggle + time) is hidden until it is wired in Phase 2, which
 // seeds its settings in a new migration.
-export const FEATURE_SETTINGS = [
+const FEATURE_SETTINGS = [
   { key: "body_checkin_enabled", label: "set.checkin" },
   { key: "dnd_during_pomodoro", label: "set.dnd" },
   { key: "friction_starter_enabled", label: "set.friction" },
   { key: "autostart", label: "set.autostart" },
 ] as const;
 
-export const TIME_SETTINGS = [
+const TIME_SETTINGS = [
   { key: "recap_time", label: "set.recapTime", fallback: "22:00" },
 ] as const;
 
-export const CHOICE_SETTINGS = [
+const CHOICE_SETTINGS = [
   {
     key: "pomodoro_duration",
     label: "set.pomDuration",
@@ -48,8 +50,11 @@ export const CHOICE_SETTINGS = [
   },
 ] as const;
 
-export const ALL_SETTING_KEYS = [
+const ALL_SETTING_KEYS = [
   "language",
+  "ui_bolt_color",
+  "ui_animations",
+  "ui_lightning",
   ...TEXT_SETTINGS.map((s) => s.key),
   ...FEATURE_SETTINGS.map((s) => s.key),
   ...TIME_SETTINGS.map((s) => s.key),
@@ -59,6 +64,7 @@ export const ALL_SETTING_KEYS = [
 export default function PageSettings() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     getSettings(ALL_SETTING_KEYS)
@@ -70,9 +76,9 @@ export default function PageSettings() {
   }, []);
 
   // Write through to SQLite, then mirror locally so the control stays in sync
-  // even if the row did not exist yet.
-  // Every write is announced, so the pet window (and the i18n cache in both
-  // windows) pick it up without a restart.
+  // even if the row did not exist yet. Every write is announced, so the pet
+  // window (and the i18n and theme caches in both windows) pick it up
+  // without a restart.
   const save = async (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
     try {
@@ -83,114 +89,68 @@ export default function PageSettings() {
     }
   };
 
-  if (!loaded) return <div style={emptyText}>{t("common.loading")}</div>;
+  if (!loaded) return <p className="empty-line">{t("common.loading")}</p>;
+
+  const animations = values.ui_animations !== "false";
+  const bolt = values.ui_bolt_color ?? "electric";
 
   return (
     <>
-      <div>
-        <div style={sectionLabel}>{t("set.general")}</div>
-        <div style={card}>
-          <SettingRow label={t("set.language")} last={false}>
+      <Card title={t("set.general")}>
+        <div className="settings">
+          <SettingRow label={t("set.language")} htmlFor="set-language">
             <select
+              id="set-language"
+              className="field field--select"
               value={values.language ?? "en"}
               onChange={(e) => void save("language", e.target.value)}
-              style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "0.5px solid rgba(255,255,255,0.1)",
-                borderRadius: 6,
-                color: "rgba(255,255,255,0.7)",
-                fontSize: 12,
-                padding: "3px 6px",
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
             >
               <option value="en">English</option>
               <option value="id">Bahasa Indonesia</option>
             </select>
           </SettingRow>
-
-          {TEXT_SETTINGS.map((s, i) => (
-            <SettingRow key={s.key} label={t(s.label)} last={i === TEXT_SETTINGS.length - 1}>
-              <EditableValue
-                value={values[s.key] ?? ""}
-                onSave={(v) => void save(s.key, v)}
-              />
+          {TEXT_SETTINGS.map((s) => (
+            <SettingRow key={s.key} label={t(s.label)} htmlFor={`set-${s.key}`}>
+              <TextSetting id={`set-${s.key}`} value={values[s.key] ?? ""} onSave={(v) => void save(s.key, v)} />
             </SettingRow>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div>
-        <div style={sectionLabel}>{t("set.features")}</div>
-        <div style={card}>
-          {FEATURE_SETTINGS.map((s, i) => (
-            <SettingRow
-              key={s.key}
-              label={t(s.label)}
-              last={i === FEATURE_SETTINGS.length - 1}
-            >
+      <Card title={t("set.features")}>
+        <div className="settings">
+          {FEATURE_SETTINGS.map((s) => (
+            <SettingRow key={s.key} label={t(s.label)}>
               <Toggle
+                label={t(s.label)}
                 on={values[s.key] === "true"}
                 onChange={(on) => void save(s.key, String(on))}
               />
             </SettingRow>
           ))}
-        </div>
-      </div>
-
-      <div>
-        <div style={sectionLabel}>{t("set.timing")}</div>
-        <div style={card}>
           {TIME_SETTINGS.map((s) => (
-            <SettingRow key={s.key} label={t(s.label)} last={false}>
+            <SettingRow key={s.key} label={t(s.label)} htmlFor={`set-${s.key}`}>
               <input
+                id={`set-${s.key}`}
                 type="time"
+                className="field field--short"
                 value={values[s.key] || s.fallback}
                 onChange={(e) => void save(s.key, e.target.value)}
-                style={{
-                  background: "rgba(255,255,255,0.06)",
-                  border: "0.5px solid rgba(255,255,255,0.1)",
-                  borderRadius: 6,
-                  color: "rgba(255,255,255,0.7)",
-                  fontSize: 12,
-                  padding: "3px 6px",
-                  outline: "none",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  colorScheme: "dark",
-                }}
               />
             </SettingRow>
           ))}
-
-          {CHOICE_SETTINGS.map((s, i) => (
-            <SettingRow
-              key={s.key}
-              label={t(s.label)}
-              last={i === CHOICE_SETTINGS.length - 1}
-            >
+          {CHOICE_SETTINGS.map((s) => (
+            <SettingRow key={s.key} label={t(s.label)} htmlFor={`set-${s.key}`}>
               <select
+                id={`set-${s.key}`}
+                className="field field--select field--short"
                 value={values[s.key] || s.fallback}
                 onChange={(e) => void save(s.key, e.target.value)}
-                style={{
-                  background: "#0d0f14",
-                  border: "0.5px solid rgba(255,255,255,0.1)",
-                  borderRadius: 6,
-                  color: "rgba(255,255,255,0.7)",
-                  fontSize: 12,
-                  padding: "3px 6px",
-                  outline: "none",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
               >
                 {/* A value set elsewhere (or seeded) may not be in the list. */}
-                {(s.options as readonly string[]).includes(values[s.key] || s.fallback)
-                  ? null
-                  : (
-                      <option value={values[s.key]}>{t("set.minutes", { n: values[s.key] })}</option>
-                    )}
+                {(s.options as readonly string[]).includes(values[s.key] || s.fallback) ? null : (
+                  <option value={values[s.key]}>{t("set.minutes", { n: values[s.key] })}</option>
+                )}
                 {s.options.map((v) => (
                   <option key={v} value={v}>
                     {t("set.minutes", { n: v })}
@@ -200,11 +160,51 @@ export default function PageSettings() {
             </SettingRow>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div style={{ ...emptyText, paddingTop: 0 }}>
-        {t("set.shortcuts", { n: NAV_ITEMS.length })}
-      </div>
+      <Card title={t("set.appearance")}>
+        <div className="settings">
+          <SettingRow label={t("set.bolt")} hint={t("set.boltHint")}>
+            <div className="swatches" role="radiogroup" aria-label={t("set.bolt")}>
+              {BOLT_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={bolt === p.id}
+                  className={`swatch${bolt === p.id ? " swatch--on" : ""}`}
+                  onClick={() => void save("ui_bolt_color", p.id)}
+                >
+                  <span className={`swatch__dot swatch__dot--${p.id}`} aria-hidden="true">
+                    {bolt === p.id && <i className="ti ti-check" />}
+                  </span>
+                  {t(p.label)}
+                </button>
+              ))}
+            </div>
+          </SettingRow>
+          <SettingRow
+            label={t("set.animations")}
+            hint={reducedMotion ? t("set.reducedMotion") : t("set.animationsHint")}
+          >
+            <Toggle
+              label={t("set.animations")}
+              on={animations}
+              onChange={(on) => void save("ui_animations", String(on))}
+            />
+          </SettingRow>
+          <SettingRow label={t("set.lightning")} hint={animations ? undefined : t("set.lightningOff")}>
+            <Toggle
+              label={t("set.lightning")}
+              on={animations && values.ui_lightning !== "false"}
+              disabled={!animations}
+              onChange={(on) => void save("ui_lightning", String(on))}
+            />
+          </SettingRow>
+        </div>
+      </Card>
+
+      <p className="muted page-end">{t("set.shortcuts", { n: NAV_ITEMS.length })}</p>
     </>
   );
 }
