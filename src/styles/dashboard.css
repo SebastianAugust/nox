@@ -1,0 +1,150 @@
+/* Dashboard window: shell, headers and page layout. Tokens only. */
+
+.dash {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.dash__scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Top bar: floats over the sky, turns solid once the page scrolls. ── */
+
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-5) var(--sp-7);
+  padding: var(--sp-7) var(--sp-7) var(--sp-5) var(--sp-12);
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.topbar--solid {
+  background: var(--sky);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.topbar__logo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.topbar__name {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: var(--fs-2xl);
+  line-height: 1;
+}
+
+.topbar__nav {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.nav-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--overlay);
+  border: 1px solid var(--line);
+}
+
+.topbar__actions {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.round-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--control-sm);
+  block-size: var(--control-sm);
+  border-radius: var(--r-pill);
+  border: 0;
+  background: var(--overlay);
+  color: var(--text-dim);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.round-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.round-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.round-btn--close:hover {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+/* ── Page header (sky band) ── */
+
+.page-header {
+  position: relative;
+  padding: calc(var(--control-sm) + var(--sp-7) + var(--sp-10)) var(--sp-12) var(--sp-16);
+}
+
+.page-header__content {
+  position: relative;
+  z-index: 5;
+  max-width: 1120px;
+}
+
+.page-header--hero {
+  padding-bottom: var(--sp-14);
+}
+
+.page-title {
+  margin: 0;
+  font-family: var(--font-head);
+  font-weight: var(--fw-head);
+  font-size: var(--fs-4xl);
+  line-height: var(--lh-tight);
+}
+
+.page-sub {
+  margin: var(--sp-2) 0 0;
+  color: var(--text-dim);
+  font-size: var(--fs-md);
+}
+
+/* ── Page body ── */
+
+.dash-main {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1240px;
+  padding: var(--sp-6) var(--sp-12) var(--sp-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-9);
+}

@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { getTodayStats, getUpcoming, type TodayStats } from "../../lib/db-helpers";
 import { t } from "../../lib/i18n";
 import { card, emptyText, rowBorder, sectionLabel, statCard } from "../../styles/shared";
+import type { Appearance } from "../../lib/theme";
 import { formatDue } from "../format";
+import PageHeader from "../PageHeader";
 
-export default function PageHome() {
+export default function PageHome({ appearance }: { appearance: Appearance }) {
   const [stats, setStats] = useState<TodayStats | null>(null);
   const [upcoming, setUpcoming] = useState<
     { title: string; due_date: string; source: string }[]
@@ -39,6 +41,10 @@ export default function PageHome() {
 
   return (
     <>
+      <PageHeader appearance={appearance} hero>
+        <h1 className="page-title">{t("nav.home")}</h1>
+      </PageHeader>
+      <main className="dash-main">
       {/* Pet preview */}
       <div
         style={{
@@ -150,6 +156,7 @@ export default function PageHome() {
           })}
         </div>
       </div>
+      </main>
     </>
   );
 }

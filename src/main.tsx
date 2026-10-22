@@ -18,6 +18,7 @@ import "./styles/tokens.css";
 import "./styles/motion.css";
 import "./styles/ui.css";
 import "./styles/pet.css";
+import "./styles/dashboard.css";
 import "./index.css";
 
 // Both windows load this same bundle; pick the view by window label.

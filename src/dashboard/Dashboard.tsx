@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { getSetting } from "../lib/db-helpers";
-import { locale, t, useLanguage } from "../lib/i18n";
+import { t, useLanguage } from "../lib/i18n";
 import { useAppearance } from "../lib/theme";
+import { SlitEyes } from "../components/deco/Deco";
 import { NAV_ITEMS, type Page } from "./nav";
+import PageHeader from "./PageHeader";
 import PageHome from "./pages/Home";
 import PageHabits from "./pages/Habits";
 import PagePomodoro from "./pages/Focus";
@@ -15,19 +16,12 @@ import PageSettings from "./pages/Settings";
 
 export function Dashboard() {
   const [page, setPage] = useState<Page>("home");
-  const [userName, setUserName] = useState("");
+  const [scrolled, setScrolled] = useState(false);
   useLanguage(); // re-render every string when the language setting changes
-  useAppearance();
+  const appearance = useAppearance();
 
-  const handleClose = () => {
-    invoke("close_dashboard").catch(console.error);
-  };
-
-  useEffect(() => {
-    getSetting("user_name")
-      .then((n) => setUserName(n ?? "Bas"))
-      .catch(console.error);
-  }, []);
+  // A new page starts at the top, under a see-through bar.
+  useEffect(() => setScrolled(false), [page]);
 
   // Escape closes the window; 1-7 jump to a page. Both are ignored while a
   // field has focus, so typing a habit called "2 km run" still works and
@@ -52,300 +46,99 @@ export function Dashboard() {
   }, []);
 
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100vh",
-        background: "#0d0f14",
-        display: "flex",
-        flexDirection: "column",
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        overflow: "hidden",
-      }}
-    >
-      <TitleBar onClose={handleClose} userName={userName} />
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <Sidebar page={page} onNavigate={setPage} />
-        <Main page={page} />
-      </div>
-    </div>
-  );
-}
-
-/** Round icon button used in the titlebar (minimize / close). */
-function TitleBarButton({
-  onClick,
-  title,
-  base,
-  hover,
-  color,
-  children,
-}: {
-  onClick: () => void;
-  title: string;
-  base: string;
-  hover: string;
-  color: string;
-  children: React.ReactNode;
-}) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        width: 22,
-        height: 22,
-        borderRadius: "50%",
-        border: "none",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 13,
-        lineHeight: 1,
-        cursor: "pointer",
-        background: hovered ? hover : base,
-        color,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function TitleBar({
-  onClose,
-  userName,
-}: {
-  onClose: () => void;
-  userName: string;
-}) {
-  // `data-tauri-drag-region` makes this area drag the window (uses the same
-  // start-dragging permission as the pet). Buttons have no such attribute, so
-  // they stay clickable.
-  return (
-    <div
-      data-tauri-drag-region=""
-      style={{
-        height: 38,
-        background: "#080a0d",
-        borderBottom: "0.5px solid rgba(255,255,255,0.06)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 14px",
-        flexShrink: 0,
-      }}
-    >
-      <span
-        data-tauri-drag-region=""
-        style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}
+    <div className="dash">
+      <TopBar page={page} onNavigate={setPage} solid={scrolled} />
+      <div
+        key={page}
+        className="dash__scroll"
+        onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 4)}
       >
-        {userName ? `Nox · ${userName}` : "Nox"}
-      </span>
-      <div style={{ display: "flex", gap: 6 }}>
-        <TitleBarButton
-          onClick={() => getCurrentWindow().minimize().catch(console.error)}
-          title={t("dash.minimize")}
-          base="rgba(255,255,255,0.08)"
-          hover="rgba(255,255,255,0.16)"
-          color="rgba(255,255,255,0.5)"
-        >
-          –
-        </TitleBarButton>
-        <TitleBarButton
-          onClick={onClose}
-          title={t("dash.close")}
-          base="rgba(239,68,68,0.15)"
-          hover="rgba(239,68,68,0.3)"
-          color="rgba(239,68,68,0.85)"
-        >
-          ×
-        </TitleBarButton>
+        {page === "home" ? (
+          <PageHome appearance={appearance} />
+        ) : (
+          <>
+            <PageHeader appearance={appearance}>
+              <h1 className="page-title">{t(`nav.${page}`)}</h1>
+              <p className="page-sub">{t(`sub.${page}`)}</p>
+            </PageHeader>
+            <main className="dash-main">
+              {page === "habits" && <PageHabits />}
+              {page === "pomodoro" && <PagePomodoro />}
+              {page === "todos" && <PageTodos />}
+              {page === "recap" && <PageRecap />}
+              {page === "integrations" && <PageIntegrations />}
+              {page === "settings" && <PageSettings />}
+            </main>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-function Sidebar({
+function TopBar({
   page,
   onNavigate,
+  solid,
 }: {
   page: Page;
   onNavigate: (p: Page) => void;
+  solid: boolean;
 }) {
-  const [tooltip, setTooltip] = useState<{ label: string; top: number } | null>(null);
-
+  // `data-tauri-drag-region` makes the bar drag the window. Only the bar and
+  // the logo carry it, so every button stays clickable.
   return (
-    <div
-      style={{
-        width: 60,
-        background: "#080a0d",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        padding: "16px 0",
-        gap: 4,
-        borderRight: "0.5px solid rgba(255,255,255,0.06)",
-        flexShrink: 0,
-        position: "relative",
-      }}
-    >
-      {/* Logo */}
-      <div
-        style={{
-          width: 30,
-          height: 30,
-          background: "#00e5a0",
-          borderRadius: 8,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: 12,
-          color: "#080a0d",
-          fontWeight: 700,
-          fontSize: 16,
-        }}
-      >
-        N
+    <div data-tauri-drag-region="" className={`topbar${solid ? " topbar--solid" : ""}`}>
+      <div data-tauri-drag-region="" className="topbar__logo">
+        <SlitEyes />
+        <span data-tauri-drag-region="" className="topbar__name">
+          nox
+        </span>
       </div>
 
-      {NAV_ITEMS.map((item, i) => {
-        const active = page === item.id;
-        return (
-          <div key={item.id} style={{ position: "relative" }}>
-            {/* Accent bar marks the active page without squaring off the button. */}
-            <div
-              style={{
-                position: "absolute",
-                left: -9,
-                top: "50%",
-                transform: "translateY(-50%)",
-                width: 2,
-                height: 20,
-                borderRadius: 1,
-                background: active ? "#00e5a0" : "transparent",
-              }}
-            />
-            <button
-              onClick={() => onNavigate(item.id)}
-              title={`${t(item.label)} (${i + 1})`}
-              onMouseEnter={(e) =>
-                setTooltip({
-                  label: `${t(item.label)} · ${i + 1}`,
-                  top: e.currentTarget.getBoundingClientRect().top + 21,
-                })
-              }
-              onMouseLeave={() => setTooltip(null)}
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: 8,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: active ? "rgba(255,255,255,0.07)" : "transparent",
-                border: "none",
-                color: active ? "#00e5a0" : "rgba(255,255,255,0.3)",
-                fontSize: 18,
-                cursor: "pointer",
-              }}
-            >
-              <i className={`ti ${item.icon}`} aria-hidden="true" />
-            </button>
-          </div>
-        );
-      })}
+      <nav aria-label={t("dash.nav")} className="topbar__nav">
+        <div className="nav-pills">
+          {NAV_ITEMS.map((item, i) => {
+            const active = page === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onNavigate(item.id)}
+                aria-current={active ? "page" : undefined}
+                title={`${t(item.label)} (${i + 1})`}
+                className={`pill${active ? " pill--selected" : ""}`}
+              >
+                {t(item.label)}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
-      <div style={{ flex: 1 }} />
-
-      {tooltip && (
-        <div
-          style={{
-            position: "fixed",
-            left: 66,
-            top: tooltip.top,
-            transform: "translateY(-50%)",
-            background: "rgba(0,0,0,0.85)",
-            border: "0.5px solid rgba(255,255,255,0.08)",
-            color: "rgba(255,255,255,0.85)",
-            padding: "3px 8px",
-            borderRadius: 6,
-            fontSize: 11,
-            whiteSpace: "nowrap",
-            pointerEvents: "none",
-            zIndex: 100,
-          }}
+      <div className="topbar__actions">
+        <button
+          type="button"
+          onClick={() => getCurrentWindow().minimize().catch(console.error)}
+          aria-label={t("dash.minimize")}
+          title={t("dash.minimize")}
+          className="round-btn"
         >
-          {tooltip.label}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Main({ page }: { page: Page }) {
-  const title = t(`nav.${page}`);
-  const sub =
-    page === "home"
-      ? new Date().toLocaleDateString(locale(), {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-        })
-      : t(`sub.${page}`);
-
-  return (
-    <div
-      style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          padding: "20px 24px 14px",
-          borderBottom: "0.5px solid rgba(255,255,255,0.06)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexShrink: 0,
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 500, color: "rgba(255,255,255,0.85)" }}>
-            {title}
-          </div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
-            {sub}
-          </div>
-        </div>
-        <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#00e5a0" }} />
-      </div>
-
-      {/* Content */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "20px 24px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-        }}
-      >
-        {page === "home" && <PageHome />}
-        {page === "habits" && <PageHabits />}
-        {page === "pomodoro" && <PagePomodoro />}
-        {page === "todos" && <PageTodos />}
-        {page === "recap" && <PageRecap />}
-        {page === "integrations" && <PageIntegrations />}
-        {page === "settings" && <PageSettings />}
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M2 6h8" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={() => invoke("close_dashboard").catch(console.error)}
+          aria-label={t("dash.close")}
+          title={`${t("dash.close")} (Esc)`}
+          className="round-btn round-btn--close"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M3 3l6 6M9 3l-6 6" />
+          </svg>
+        </button>
       </div>
     </div>
   );

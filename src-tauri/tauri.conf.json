@@ -27,8 +27,8 @@
       {
         "label": "dashboard",
         "title": "Nox Dashboard",
-        "width": 720,
-        "height": 600,
+        "width": 1000,
+        "height": 760,
         "decorations": false,
         "transparent": false,
         "alwaysOnTop": false,
