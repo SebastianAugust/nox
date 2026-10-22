@@ -14,9 +14,11 @@ use tauri::{AppHandle, LogicalSize, Manager, PhysicalPosition, State, WebviewWin
 
 use crate::db::read_setting;
 
-// Window logical dimensions (must match tauri.conf.json).
-const WIN_W: f64 = 160.0;
-const WIN_H: f64 = 200.0;
+// Window logical dimensions (must match tauri.conf.json). WIN_H is the
+// collapsed height, HEIGHT_CLOSED in src/App.tsx. Wide enough for the
+// ~300px dialog box; the transparent rest is click-through.
+const WIN_W: f64 = 330.0;
+const WIN_H: f64 = 350.0;
 const MARGIN_RIGHT: f64 = 16.0;
 const MARGIN_BOTTOM: f64 = 200.0;
 

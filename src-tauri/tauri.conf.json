@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "Nox",
-        "width": 160,
-        "height": 200,
+        "width": 330,
+        "height": 350,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,

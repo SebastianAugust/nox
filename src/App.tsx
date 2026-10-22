@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Pet, { type PetState } from "./components/Pet";
 import Bubble from "./components/Bubble";
 import ChatInput from "./components/ChatInput";
 import CheckinPrompt from "./components/CheckinPrompt";
+import { ChunkyButton } from "./components/ui/controls";
 import { chat, HISTORY_LIMIT, type ChatMessage } from "./lib/ollama";
 import { getDb } from "./lib/db";
 import {
@@ -28,12 +30,16 @@ import {
   getPomodoroSnapshot,
   startPomodoroEngine,
   subscribePomodoro,
+  type PomCommand,
   type PomPhase,
 } from "./lib/pomodoroEngine";
 
-const HEIGHT_OPEN = 320;
-const HEIGHT_CHECKIN = 250;
-const HEIGHT_CLOSED = 200;
+// Logical heights of the pet window. Tall enough for the dialog box with its
+// action row at full text height; the empty space above stays click-through.
+// HEIGHT_CLOSED must match WIN_H in src-tauri/src/pet.rs and tauri.conf.json.
+const HEIGHT_OPEN = 410;
+const HEIGHT_CHECKIN = 500;
+const HEIGHT_CLOSED = 350;
 const SAVE_POSITION_MS = 500; // debounce after the window stops moving
 const REVERT_MS = 10000; // how long an answer lingers before the bubble resets
 const FLASH_MS = 4000; // how long a one-off expression (excited/happy) holds
@@ -68,6 +74,10 @@ function App() {
   const [chatOpen, setChatOpen] = useState(false);
   const [showCheckin, setShowCheckin] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  // The bubble text that offers Start focus / Later; actions show only while
+  // the bubble still says exactly that.
+  const [actionsFor, setActionsFor] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
   const revertTimerRef = useRef<number | null>(null);
   const flashTimerRef = useRef<number | null>(null);
@@ -178,6 +188,7 @@ function App() {
       timer = window.setTimeout(async () => {
         // The window stopped moving, so any drag is over.
         draggingRef.current = false;
+        setDragging(false);
         reportHitsRef.current();
         const [pos, size, scale] = await Promise.all([
           win.outerPosition(),
@@ -207,6 +218,7 @@ function App() {
           case "reminder":
             clearRevert();
             flashState("alert", 20000);
+            setActionsFor(text);
             break;
           case "checkin":
             setPetState("alert");
@@ -346,6 +358,7 @@ function App() {
     // leaving the sprite mid-drag cannot turn on click-through. Cleared on
     // release, or once the window stops moving after a drag.
     draggingRef.current = true;
+    setDragging(true);
     reportHitsRef.current();
 
     const cleanup = () => {
@@ -361,6 +374,7 @@ function App() {
     const onUp = () => {
       cleanup();
       draggingRef.current = false;
+      setDragging(false);
       reportHitsRef.current();
     };
 
@@ -542,22 +556,44 @@ function App() {
 
   const handleStop = () => controllerRef.current?.abort();
 
+  // Reminder actions. The engine listens for the same event the dashboard
+  // sends, so starting here goes through the one pomodoro path.
+  const startFocusFromBubble = () => {
+    touch();
+    setActionsFor(null);
+    emit("pomodoro:cmd", { type: "start" } satisfies PomCommand).catch(console.error);
+  };
+
+  const later = () => {
+    touch();
+    setActionsFor(null);
+    setPetState(ambientState());
+    setBubbleText(null);
+  };
+
+  const shownText = bubbleText ?? t("pet.greeting");
+  // A soft lightning-blue halo while Nox talks, thinks or a focus session runs.
+  const halo = isStreaming || petState === "thinking" || getPomodoroSnapshot().phase === "focus";
+
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        background: "transparent",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "flex-end",
-        padding: "0 10px 8px",
-        gap: 6,
-        overflow: "hidden",
-      }}
-    >
-      <Bubble text={bubbleText ?? t("pet.greeting")} isStreaming={isStreaming} onStop={handleStop} />
+    <div className="pet-root">
+      <Bubble
+        text={shownText}
+        isStreaming={isStreaming}
+        onStop={handleStop}
+        actions={
+          actionsFor !== null && actionsFor === bubbleText ? (
+            <>
+              <ChunkyButton size="sm" onClick={startFocusFromBubble}>
+                {t("pet.startFocus")}
+              </ChunkyButton>
+              <ChunkyButton size="sm" variant="secondary" onClick={later}>
+                {t("pet.later")}
+              </ChunkyButton>
+            </>
+          ) : undefined
+        }
+      />
       {chatOpen && (
         <ChatInput
           onSend={handleSend}
@@ -569,7 +605,10 @@ function App() {
       {!chatOpen && showCheckin && (
         <CheckinPrompt onPick={handleCheckin} onDismiss={dismissCheckin} />
       )}
-      <Pet state={petState} onClick={toggleChat} onMouseDown={handlePetMouseDown} />
+      <div className={`pet-stage${dragging ? "" : " nox-bob"}`}>
+        {halo && <span className="halo" aria-hidden="true" />}
+        <Pet state={petState} onClick={toggleChat} onMouseDown={handlePetMouseDown} />
+      </div>
     </div>
   );
 }

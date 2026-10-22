@@ -40,70 +40,37 @@ export default function ChatInput({ onSend, onClose, onFocusChange, disabled }: 
   const isCommand = value.startsWith("/");
 
   return (
-    <div
-      data-hit
-      style={{
-        width: "100%",
-        background: "rgba(12, 16, 32, 0.88)",
-        border: "0.5px solid rgba(255,255,255,0.15)",
-        borderRadius: 12,
-        padding: "6px 10px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 3,
-        backdropFilter: "blur(4px)",
-        WebkitBackdropFilter: "blur(4px)",
-      }}
-    >
-      {isCommand && (
-        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>
-          {t("chat.commandHint")}
-        </div>
-      )}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
-      <input
-        ref={inputRef}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onFocus={() => onFocusChange?.(true)}
-        onBlur={() => onFocusChange?.(false)}
-        disabled={disabled}
-        placeholder={t("chat.placeholder")}
-        spellCheck={false}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          background: "transparent",
-          border: "none",
-          outline: "none",
-          color: "rgba(255,255,255,0.85)",
-          fontSize: 11,
-          fontFamily: "inherit",
-          caretColor: "rgba(255,255,255,0.6)",
-          opacity: disabled ? 0.5 : 1,
-        }}
-      />
-      {value.trim() && (
-        <button
-          onClick={submit}
+    <div data-hit className="chat">
+      {isCommand && <div className="chat__hint">{t("chat.commandHint")}</div>}
+      <div className="chat__pill">
+        <label htmlFor="nox-chat" className="sr-only">
+          {t("chat.label")}
+        </label>
+        <input
+          id="nox-chat"
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onFocus={() => onFocusChange?.(true)}
+          onBlur={() => onFocusChange?.(false)}
           disabled={disabled}
+          placeholder={t("chat.placeholder")}
+          spellCheck={false}
+          className="chat__input"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={disabled || !value.trim()}
+          aria-label={t("chat.send")}
           title={t("chat.send")}
-          style={{
-            background: "rgba(255,255,255,0.1)",
-            border: "0.5px solid rgba(255,255,255,0.15)",
-            borderRadius: 6,
-            color: "rgba(255,255,255,0.6)",
-            fontSize: 10,
-            lineHeight: 1,
-            padding: "2px 6px",
-            cursor: disabled ? "default" : "pointer",
-            flexShrink: 0,
-          }}
+          className="chat__send"
         >
-          ↵
+          <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
         </button>
-      )}
       </div>
     </div>
   );

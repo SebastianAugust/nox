@@ -109,6 +109,10 @@ html[data-animations="off"] .night-sky .nox-anim {
   animation: none !important;
 }
 
+.nox-bob {
+  animation: nox-bob 4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .nox-anim,
   .nox-anim *,

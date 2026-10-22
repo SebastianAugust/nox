@@ -1,0 +1,158 @@
+/* Pet window (App.tsx). Bottom-right anchored: everything stacks upward. */
+
+.pet-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: var(--sp-6);
+  padding: 0 var(--sp-7) var(--sp-5);
+  overflow: hidden;
+}
+
+.bubble-text {
+  max-height: calc(var(--fs-md) * var(--lh-body) * 5); /* five lines */
+  overflow-y: auto;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+}
+
+/* Leaves room for the stop button in the corner. */
+.bubble-text--streaming {
+  padding-right: var(--sp-12);
+}
+
+.icon-btn--xs {
+  inline-size: var(--sp-12);
+  block-size: var(--sp-12);
+  font-size: var(--fs-md);
+}
+
+.chat {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.chat__hint {
+  align-self: flex-start;
+  padding: var(--sp-1) var(--sp-5);
+  border-radius: var(--r-pill);
+  background: var(--sky);
+  color: var(--text-dim);
+  font-size: var(--fs-2xs);
+}
+
+.chat__pill {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  block-size: calc(var(--control-lg) + var(--sp-1));
+  padding: 0 var(--sp-2) 0 var(--sp-9);
+  border-radius: var(--r-pill);
+  background: var(--sky);
+  border: 2px solid var(--accent);
+}
+
+.chat__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-body);
+  caret-color: var(--accent);
+  outline: none;
+}
+
+/* The mint pill border is the focus indicator for the text field. */
+.chat__input:focus-visible {
+  box-shadow: none;
+}
+
+.chat__input:disabled {
+  color: var(--text-dim);
+}
+
+.chat__send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  inline-size: var(--sp-16);
+  block-size: var(--sp-16);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.chat__send svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chat__send:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.chat__send:disabled {
+  opacity: 0.5;
+}
+
+.moods {
+  display: flex;
+  gap: var(--sp-2);
+  width: 100%;
+}
+
+.mood {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-1);
+  border-radius: var(--r-small);
+  border: 2px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.mood i {
+  font-size: var(--fs-lg);
+}
+
+.mood:hover {
+  border-color: var(--line-strong);
+  background: var(--line);
+}
+
+.pet-stage {
+  position: relative;
+  flex: none;
+}
+
+/* Behind the sprite only: a soft round glow, never markings on the body. */
+.halo {
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--bolt-glow) 0%, transparent 70%);
+  pointer-events: none;
+  animation: nox-halo-in var(--dur-slow) var(--ease-out);
+}
