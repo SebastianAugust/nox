@@ -1,0 +1,746 @@
+/* Shared components (src/components/ui, src/components/deco). Tokens only. */
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+/* Keyboard focus is lightning blue everywhere. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.pixel {
+  font-family: var(--font-pixel);
+}
+
+/* ── Night sky ────────────────────────────────────────────────────────── */
+
+.night-sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--sky);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sky-star {
+  position: absolute;
+  background: var(--moon);
+  animation: nox-twinkle 3.2s ease-in-out infinite;
+}
+
+.sky-star--bolt {
+  background: var(--bolt);
+}
+
+.sky-moon,
+.sky-moon-shadow {
+  position: absolute;
+  border-radius: var(--r-pill);
+}
+
+.sky-moon {
+  right: 8%;
+  top: 56px;
+  width: 70px;
+  height: 70px;
+  background: var(--moon);
+  animation: nox-moon 7s ease-in-out infinite;
+}
+
+.sky-moon-shadow {
+  right: calc(8% - 16px);
+  top: 46px;
+  width: 66px;
+  height: 66px;
+  background: var(--sky);
+}
+
+.night-sky--compact .sky-moon {
+  top: 20px;
+  width: 48px;
+  height: 48px;
+}
+
+.night-sky--compact .sky-moon-shadow {
+  right: calc(8% - 11px);
+  top: 13px;
+  width: 45px;
+  height: 45px;
+}
+
+.lightning-layer,
+.lightning-flash {
+  position: absolute;
+  inset: 0;
+}
+
+.lightning-layer {
+  z-index: 1;
+}
+
+.lightning-svg {
+  display: block;
+}
+
+.bolt path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.bolt-glow path {
+  stroke: var(--bolt-glow);
+}
+
+.bolt-core {
+  stroke: var(--bolt-core);
+}
+
+.bolt-stop {
+  stop-color: var(--bolt-core);
+  stop-opacity: 1;
+}
+
+.bolt-stop--end {
+  stop-opacity: 0;
+}
+
+.sky-cloud {
+  position: absolute;
+  left: -220px;
+  z-index: 2;
+  border-radius: var(--r-pill);
+  --drift-distance: calc(100vw + 440px);
+  animation: nox-drift 80s linear infinite;
+}
+
+.sky-cloud--a {
+  top: 62%;
+  width: 200px;
+  height: 36px;
+  background: var(--cloud-1);
+  opacity: 0.7;
+}
+
+.sky-cloud--b {
+  top: 24%;
+  width: 130px;
+  height: 26px;
+  background: var(--cloud-2);
+  opacity: 0.6;
+  animation-duration: 110s;
+  animation-delay: -50s;
+}
+
+.sky-cloud--c {
+  top: 40%;
+  width: 160px;
+  height: 30px;
+  background: var(--cloud-1);
+  opacity: 0.5;
+  animation-duration: 95s;
+  animation-delay: -20s;
+}
+
+.lightning-flash {
+  z-index: 3;
+  opacity: 0;
+}
+
+.sky-shooting {
+  position: absolute;
+  left: 28%;
+  top: 18px;
+  z-index: 3;
+  width: 90px;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--moon));
+  opacity: 0;
+  animation: nox-shoot 11s ease-out infinite 2s;
+}
+
+.sky-ember {
+  position: absolute;
+  bottom: 14px;
+  z-index: 3;
+  width: 4px;
+  height: 4px;
+  background: var(--warn);
+  opacity: 0;
+  animation: nox-rise 6s ease-in infinite;
+}
+
+.sky-ember--light {
+  width: 3px;
+  height: 3px;
+  background: var(--warn-text);
+}
+
+/* Scaled horizon: rows of half-circles fading into the page below. */
+.sky-horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  height: 22px;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at 50% 100%, transparent 9px, var(--scale-line) 10px, transparent 11px),
+    radial-gradient(circle at 50% 100%, transparent 9px, var(--scale-line) 10px, transparent 11px);
+  background-size: 22px 12px;
+  background-position: 0 0, 11px 6px;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+
+/* ── Dialog box ───────────────────────────────────────────────────────── */
+
+.dialog-wrap {
+  position: relative;
+  width: 100%;
+  padding-top: var(--sp-8);
+}
+
+.dialog {
+  position: relative;
+  padding: var(--sp-9) var(--sp-9) var(--sp-7);
+  background: var(--dialog);
+  color: var(--text);
+  border: var(--border-pixel) solid var(--text);
+  border-radius: var(--r-dialog);
+  box-shadow: var(--shadow-dialog);
+}
+
+.dialog-wrap--sm .dialog {
+  padding: var(--sp-9) var(--sp-7) var(--sp-6);
+}
+
+.dialog__tag {
+  position: absolute;
+  left: var(--sp-7);
+  top: calc(-1 * var(--sp-8));
+  padding: var(--sp-1) var(--sp-5);
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: var(--border-pixel) solid var(--void);
+  font-family: var(--font-pixel);
+  font-size: var(--fs-base);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+}
+
+.dialog-wrap--sm .dialog__tag {
+  left: var(--sp-5);
+  padding: var(--sp-1) var(--sp-4);
+  font-size: var(--fs-md);
+}
+
+.dialog__body {
+  font-size: var(--fs-lg);
+  line-height: 1.55;
+  font-weight: var(--fw-body);
+  overflow-wrap: anywhere;
+}
+
+.dialog-wrap--sm .dialog__body {
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+  font-weight: var(--fw-strong);
+}
+
+.dialog__body p {
+  margin: 0;
+}
+
+.dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  margin-top: var(--sp-6);
+}
+
+.dialog-wrap--sm .dialog__actions {
+  gap: var(--sp-3);
+}
+
+.dialog__corner {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  z-index: 1;
+}
+
+.dialog__more {
+  position: absolute;
+  right: var(--sp-6);
+  bottom: var(--sp-4);
+  fill: var(--accent);
+}
+
+.dialog-wrap--sm .dialog__more {
+  right: var(--sp-5);
+  bottom: var(--sp-3);
+}
+
+.text-danger {
+  color: var(--danger);
+  font-weight: var(--fw-strong);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+
+.chunky {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  border-radius: var(--r-pill);
+  border: 0;
+  font-weight: var(--fw-strong);
+  white-space: nowrap;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.chunky--sm {
+  block-size: var(--control-md);
+  padding: 0 var(--sp-7);
+  font-size: var(--fs-md);
+}
+
+.chunky--md {
+  block-size: var(--control-lg);
+  padding: 0 var(--sp-10);
+  font-size: var(--fs-base);
+}
+
+.chunky--lg {
+  block-size: calc(var(--control-lg) + var(--sp-2));
+  padding: 0 var(--sp-12);
+  font-size: var(--fs-lg);
+}
+
+.chunky--primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: var(--shadow-chunky);
+  margin-bottom: var(--sp-3); /* room for the edge, so it does not touch what follows */
+}
+
+.chunky--sm.chunky--primary {
+  box-shadow: var(--shadow-chunky-sm);
+  margin-bottom: var(--sp-2);
+}
+
+.chunky--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.chunky--primary:active:not(:disabled) {
+  transform: translateY(var(--press-depth));
+  box-shadow: 0 2px 0 var(--accent-shadow);
+}
+
+.chunky--primary:focus-visible {
+  box-shadow: var(--shadow-chunky), var(--focus-ring);
+}
+
+.chunky--secondary {
+  background: transparent;
+  color: var(--text);
+  border: 2px solid var(--line-strong);
+  font-weight: var(--fw-body);
+}
+
+.chunky--secondary:hover:not(:disabled) {
+  border-color: var(--text-dim);
+  background: var(--surface-2);
+}
+
+.chunky--secondary:active:not(:disabled),
+.chunky--quiet:active:not(:disabled),
+.chunky--danger:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.chunky--quiet {
+  background: var(--dialog-inset);
+  color: var(--text);
+}
+
+.chunky--quiet:hover:not(:disabled) {
+  background: var(--line-strong);
+}
+
+.chunky--danger {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border: 2px solid var(--danger-line);
+}
+
+.chunky--danger:hover:not(:disabled) {
+  background: var(--danger-line);
+}
+
+.chunky:disabled {
+  opacity: 0.5;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--control-sm);
+  block-size: var(--control-sm);
+  flex: none;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--fs-lg);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.icon-btn--danger:hover {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+/* ── Pills and tags ───────────────────────────────────────────────────── */
+
+.pill {
+  padding: var(--sp-4) var(--sp-7);
+  border-radius: var(--r-pill);
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-body);
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.pill:hover:not(.pill--selected) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.pill--selected {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: var(--fw-strong);
+}
+
+.tag {
+  display: inline-block;
+  flex: none;
+  padding: var(--sp-1) var(--sp-3);
+  font-family: var(--font-pixel);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tag);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tag--overdue {
+  background: var(--danger);
+  color: var(--danger-ink);
+}
+
+.tag--personal,
+.tag--neutral {
+  background: var(--dialog-inset);
+  color: var(--tag-text);
+}
+
+.tag--warn {
+  background: var(--warn);
+  color: var(--danger-ink);
+}
+
+/* ── Cards and stats ──────────────────────────────────────────────────── */
+
+.card {
+  min-width: 0;
+  padding: var(--sp-11);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-6);
+}
+
+.card__title {
+  margin: 0;
+  font-family: var(--font-head);
+  font-weight: var(--fw-head);
+  font-size: var(--fs-2xl);
+  line-height: var(--lh-tight);
+}
+
+.card__meta {
+  font-family: var(--font-pixel);
+  font-size: var(--fs-md);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stat {
+  padding: var(--sp-7) var(--sp-8);
+  border-radius: var(--r-tile);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+
+.stat__value {
+  font-family: var(--font-pixel);
+  font-size: var(--fs-4xl);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.stat__of {
+  font-size: var(--fs-xl);
+  color: var(--text-dim);
+}
+
+.stat__label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  font-weight: var(--fw-body);
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.stat__sub {
+  color: var(--danger-text);
+}
+
+/* ── Switch ───────────────────────────────────────────────────────────── */
+
+.switch {
+  position: relative;
+  flex: none;
+  inline-size: 44px;
+  block-size: 26px;
+  border-radius: var(--r-pill);
+  border: 2px solid var(--line-strong);
+  background: var(--surface-2);
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+
+.switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  inline-size: 18px;
+  block-size: 18px;
+  border-radius: var(--r-pill);
+  background: var(--text-dim);
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out);
+}
+
+.switch--on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.switch--on .switch__knob {
+  transform: translateX(18px);
+  background: var(--accent-ink);
+}
+
+.switch:disabled {
+  opacity: 0.5;
+}
+
+/* ── Deco shapes ──────────────────────────────────────────────────────── */
+
+.slit-eyes {
+  display: inline-flex;
+  gap: var(--sp-2);
+}
+
+.slit-eye {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  inline-size: 9px;
+  block-size: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: nox-blink 5s infinite;
+}
+
+.slit-eye::after {
+  content: "";
+  inline-size: 2px;
+  block-size: 9px;
+  border-radius: 1px;
+  background: var(--void);
+}
+
+.claw-marks {
+  position: absolute;
+  right: 64px;
+  top: -6px;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.claw-marks path {
+  fill: none;
+  stroke: var(--danger);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.footprint {
+  inline-size: 100%;
+  block-size: 22px;
+}
+
+.footprint--done {
+  fill: var(--accent);
+}
+
+.footprint--today {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.footprint--missed {
+  fill: var(--line);
+}
+
+.streak-egg {
+  flex: none;
+}
+
+.streak-egg__shell {
+  fill: var(--surface-2);
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.streak-egg__crack {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.streak-egg__spot {
+  fill: var(--line);
+}
+
+.wings {
+  position: relative;
+  flex: none;
+}
+
+.wing {
+  position: absolute;
+  top: 50%;
+  inline-size: 36px;
+  block-size: 28px;
+  transform: translateY(-60%);
+}
+
+.wing path {
+  fill: var(--surface-2);
+  stroke: var(--line-strong);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.wing--left {
+  left: -16px;
+}
+
+.wing--right {
+  right: -16px;
+  transform: translateY(-60%) scaleX(-1);
+}
+
+.wings--lg .wing {
+  inline-size: 72px;
+  block-size: 56px;
+}
+
+.wings--lg .wing--left {
+  left: -40px;
+}
+
+.wings--lg .wing--right {
+  right: -40px;
+}
+
+.moon-stars__moon {
+  fill: var(--moon);
+}
+
+.moon-stars__star {
+  fill: var(--moon);
+}
+
+.moon-stars__star--bolt {
+  fill: var(--bolt);
+}

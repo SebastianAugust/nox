@@ -15,6 +15,8 @@ import "@fontsource/pixelify-sans/latin-500.css";
 import "@fontsource/pixelify-sans/latin-600.css";
 import "@fontsource/pixelify-sans/latin-700.css";
 import "./styles/tokens.css";
+import "./styles/motion.css";
+import "./styles/ui.css";
 import "./index.css";
 
 // Both windows load this same bundle; pick the view by window label.
