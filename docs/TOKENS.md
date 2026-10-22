@@ -1,8 +1,18 @@
 # Tokens — Night Lair
 
 All visual values live in `src/styles/tokens.css` as CSS custom properties on
-`:root`. Components and stylesheets reference them with `var(--…)`; no hex,
-rgba, px font size, radius or duration is written anywhere else.
+`:root`. Components and stylesheets reference them with `var(--…)`; no hex or
+rgba is written anywhere else, and font sizes, radii, spacing and durations
+come from the scales below.
+
+| File | Holds |
+|---|---|
+| `src/styles/tokens.css` | the tokens |
+| `src/styles/motion.css` | decorative keyframes and their off switches |
+| `src/styles/ui.css` | shared components (`components/ui`, `components/deco`) and the night sky |
+| `src/styles/pet.css` | the pet window |
+| `src/styles/dashboard.css` | the dashboard shell and pages |
+| `src/index.css` | base reset and the sprite's expression keyframes |
 
 ## Two accents
 
@@ -74,7 +84,18 @@ Sizes: `--fs-3xs` 10 · `--fs-2xs` 11 · `--fs-xs` 12 · `--fs-sm` 13 · `--fs-m
 
 ## Motion
 
-`--dur-fast` 120ms, `--dur-base` 200ms, `--dur-slow` 300ms, `--ease-out`.
+`--dur-fast` 120ms, `--dur-base` 200ms, `--dur-slow` 300ms, `--ease-out`,
+`--press-depth` (how far a chunky button sinks).
 Decorative keyframes (`nox-twinkle`, `nox-moon`, `nox-drift`, `nox-shoot`,
 `nox-rise`, `nox-bob`, `nox-blink`) live in `src/styles/motion.css`, which
 turns all of them off under `prefers-reduced-motion: reduce`.
+
+Off switches, strongest first: the OS reduced-motion setting, then
+`html[data-animations="off"]` (the sky only), then `[data-paused]` (window
+hidden or unfocused). The pet's bob and halo follow reduced motion only.
+
+## Color scheme
+
+`.dash` sets `color-scheme: dark` so native checkboxes and time fields render
+dark. It is deliberately not on `:root`: in the transparent pet window that
+would give the page an opaque dark canvas.

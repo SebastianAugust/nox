@@ -2,10 +2,6 @@
 
 /* ── Base ─────────────────────────────────────────────────────────────── */
 
-/* Native controls (checkboxes, time and date fields) render dark. */
-:root {
-  color-scheme: dark;
-}
 
 button,
 input,

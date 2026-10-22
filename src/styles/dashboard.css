@@ -1,6 +1,9 @@
 /* Dashboard window: shell, headers and page layout. Tokens only. */
 
+/* Dark native controls (checkboxes, time fields). Dashboard only: on the
+   pet window's root it would give the transparent window an opaque canvas. */
 .dash {
+  color-scheme: dark;
   position: relative;
   width: 100%;
   height: 100vh;

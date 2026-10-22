@@ -10,7 +10,9 @@ Everything runs and is stored locally; the only network call goes to Ollama on
 
 - **Tauri v2** app with a tray icon and two windows built from one Vite + React + TypeScript bundle (`src/main.tsx` picks the view by window label).
 - **`main`**: the transparent, always-on-top pet overlay (`src/App.tsx`). It owns all timers: reminders, check-ins, friction nudge, recap, and the pomodoro engine (`src/lib/pomodoroEngine.ts`).
-- **`dashboard`**: a regular dark window (`src/dashboard/`: `Dashboard.tsx` shell, `pages/`, `widgets/`) for habits, todos, pomodoro, recap and settings. It is a view plus remote control. The pet is paused while it is open.
+- **`dashboard`**: a regular dark window (`src/dashboard/`: `Dashboard.tsx` shell, `pages/`, `widgets/`) for home, habits, focus, todos, recap, integrations and settings. It is a view plus remote control. The pet is paused while it is open.
+
+How the pieces fit: `docs/ARCHITECTURE.md`. Colors, type and the two accents: `docs/TOKENS.md`.
 - Windows talk through Tauri events (`pomodoro:*`, `settings:changed`) and the shared SQLite database.
 - **Rust**: `src-tauri/src/lib.rs` has the tray menu and dashboard open/close; `src-tauri/src/pet.rs` places the pet (saved position, kept on screen, default dock) and runs click-through, a cursor poll against the hit regions the page reports.
 - **SQLite** through `tauri-plugin-sql`. The schema and default settings are numbered migrations in `src-tauri/migrations/`, run once by Rust at startup; queries live in `src/lib/db-helpers.ts`.
