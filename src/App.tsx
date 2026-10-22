@@ -18,6 +18,7 @@ import {
 } from "./lib/db-helpers";
 import { describeDue, parseRemindArgs, parseTodoArgs } from "./lib/commands";
 import { t, useLanguage } from "./lib/i18n";
+import { useAppearance } from "./lib/theme";
 import { saveCheckin, startCheckinScheduler, type Mood } from "./lib/checkin";
 import { recordInteraction, startFrictionDetector } from "./lib/friction";
 import { startRecapScheduler } from "./lib/recap";
@@ -60,6 +61,7 @@ function ambientState(): PetState {
 function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   useLanguage(); // re-render every string when the language setting changes
+  useAppearance(); // lightning blue follows the setting live
   // null = the greeting, rendered at display time so it follows the language.
   const [bubbleText, setBubbleText] = useState<string | null>(null);
   const [petState, setPetState] = useState<PetState>("idle");

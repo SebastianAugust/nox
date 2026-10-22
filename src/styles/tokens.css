@@ -1,0 +1,137 @@
+/*
+ * Night Lair design tokens. Every color, radius, spacing step, font size,
+ * shadow and duration in the app comes from here; components never carry a
+ * literal. See docs/TOKENS.md for roles and usage rules.
+ *
+ * --bolt / --bolt-glow are overwritten at runtime from the `ui_bolt_color`
+ * setting (src/lib/theme.ts); the values below are the Electric default.
+ */
+:root {
+  /* ── Backgrounds ── */
+  --bg: #0a0e1c;
+  --sky: #0e1530;
+  --surface: #141b33;
+  --surface-2: #1a2342;
+  --line: #263055;
+  --line-strong: #3a4675;
+  --dialog: #070a14;
+  --dialog-inset: #2e3a66; /* inner frame line of the dialog box, also neutral tags */
+  --void: #05070f; /* pupils, the NOX tag outline */
+  --overlay: rgba(10, 14, 28, 0.75); /* pill nav and round buttons over the sky */
+  --overlay-soft: rgba(10, 14, 28, 0.55);
+
+  /* ── Text ── */
+  --text: #eef2ff;
+  --text-dim: #aeb8d6;
+  --tag-text: #dce3f7;
+
+  /* ── Primary accent (fixed): mint = action and done ── */
+  --accent: #3ef0a0;
+  --accent-hover: #8bf7c8;
+  --accent-ink: #06261a;
+  --accent-shadow: #1c8a5b;
+  --accent-glow: rgba(62, 240, 160, 0.16);
+  --accent-faint: rgba(62, 240, 160, 0.1);
+  --accent-glow-strong: rgba(62, 240, 160, 0.55);
+
+  /* ── Second accent (user-selectable): blue = energy and "active" ── */
+  --bolt-electric: #5ac8ff;
+  --bolt-cyan: #3fe6ff;
+  --bolt-cobalt: #5b8cff;
+  --bolt-ice: #8fd3ff;
+  --bolt: var(--bolt-electric);
+  --bolt-glow: color-mix(in srgb, var(--bolt) 40%, transparent);
+  --bolt-core: color-mix(in srgb, var(--bolt) 30%, #ffffff); /* near-white bolt channel */
+  --bolt-faint: color-mix(in srgb, var(--bolt) 12%, transparent);
+
+  /* ── Status ── */
+  --danger: #ff8a8a;
+  --danger-text: #ff9e9e;
+  --danger-bg: #2a1820;
+  --danger-line: #6a2c3c;
+  --danger-ink: #3a0d12;
+  --warn: #ffa94d;
+  --warn-text: #ffc27a;
+  --moon: #f6ebc8;
+  --moon-glow-lo: rgba(246, 235, 200, 0.16);
+  --moon-glow-hi: rgba(246, 235, 200, 0.34);
+  --cloud-1: #16204a;
+  --cloud-2: #142046;
+  --scale-line: #1a2242;
+  --scale-tint: rgba(62, 240, 160, 0.1);
+  --drop: rgba(0, 0, 0, 0.4); /* hard offset shadow under pixel frames */
+  --eyelid: #0a090b; /* matches the sprite's face, used by Pet's eyelids */
+
+  /* ── Type ── */
+  --font-head: "Fredoka", "Nunito", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, sans-serif;
+  --font-pixel: "Pixelify Sans", ui-monospace, monospace;
+
+  --fs-3xs: 10px;
+  --fs-2xs: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-base: 15px;
+  --fs-lg: 16px;
+  --fs-xl: 19px;
+  --fs-2xl: 21px;
+  --fs-3xl: 26px;
+  --fs-4xl: 32px;
+  --fs-timer: 64px;
+
+  --fw-body: 700;
+  --fw-strong: 800;
+  --fw-head: 600;
+  --lh-tight: 1.25;
+  --lh-body: 1.5;
+  --tracking-tag: 0.04em;
+
+  /* ── Spacing (4px base) ── */
+  --sp-1: 2px;
+  --sp-2: 4px;
+  --sp-3: 6px;
+  --sp-4: 8px;
+  --sp-5: 10px;
+  --sp-6: 12px;
+  --sp-7: 14px;
+  --sp-8: 16px;
+  --sp-9: 18px;
+  --sp-10: 20px;
+  --sp-11: 22px;
+  --sp-12: 24px;
+  --sp-14: 28px;
+  --sp-16: 36px;
+
+  /* ── Radii ── */
+  --r-card: 26px;
+  --r-tile: 20px;
+  --r-row: 18px;
+  --r-control: 16px;
+  --r-small: 8px;
+  --r-pill: 999px;
+  --r-dialog: 0;
+  --r-perch: 42px;
+
+  /* ── Sizes ── */
+  --control-sm: 34px;
+  --control-md: 38px;
+  --control-lg: 44px;
+  --check: 22px;
+  --border-pixel: 3px;
+
+  /* ── Shadows ── */
+  --shadow-chunky: 0 5px 0 var(--accent-shadow);
+  --shadow-chunky-sm: 0 4px 0 var(--accent-shadow);
+  --shadow-pixel: 6px 6px 0 var(--drop);
+  --shadow-dialog: inset 0 0 0 3px var(--dialog), inset 0 0 0 5px var(--bolt), 0 0 18px var(--bolt-glow),
+    var(--shadow-pixel);
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--bolt);
+
+  /* ── Motion ── */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 300ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --press-depth: 3px;
+}

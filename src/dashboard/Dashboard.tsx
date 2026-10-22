@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getSetting } from "../lib/db-helpers";
 import { locale, t, useLanguage } from "../lib/i18n";
+import { useAppearance } from "../lib/theme";
 import { NAV_ITEMS, type Page } from "./nav";
 import PageHome from "./pages/Home";
 import PageHabits from "./pages/Habits";
@@ -16,6 +17,7 @@ export function Dashboard() {
   const [page, setPage] = useState<Page>("home");
   const [userName, setUserName] = useState("");
   useLanguage(); // re-render every string when the language setting changes
+  useAppearance();
 
   const handleClose = () => {
     invoke("close_dashboard").catch(console.error);
