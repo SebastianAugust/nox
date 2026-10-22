@@ -3,6 +3,11 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { getTodayPomodoroSessions } from "../lib/db-helpers";
 import { t } from "../lib/i18n";
 import type { PomCommand, PomPhase, PomSnapshot } from "../lib/pomodoroEngine";
+import { Wings } from "./deco/Deco";
+import { ChunkyButton } from "./ui/controls";
+
+/** Sessions a day the dashboard counts toward (Home's x/4, the dots here). */
+export const DAILY_FOCUS_GOAL = 4;
 
 const DEFAULT_WORK_MINUTES = 25;
 const DEFAULT_BREAK_MINUTES = 5;
@@ -20,6 +25,7 @@ export type PomodoroView = {
   /** Length of the current phase, so focus and break both start full. */
   total: number;
   focusMinutes: number;
+  breakMinutes: number;
   sessionsToday: number;
   send: (type: PomCommand["type"]) => void;
 };
@@ -86,6 +92,7 @@ export function usePomodoro(onSnapshot?: (s: PomSnapshot) => void): PomodoroView
     seconds,
     total: phase === "break" ? breakSec : focusSec,
     focusMinutes: Math.round(focusSec / 60),
+    breakMinutes: Math.round(breakSec / 60),
     sessionsToday,
     send,
   };
@@ -151,32 +158,41 @@ type Props = {
   onSnapshot?: (s: PomSnapshot) => void;
 };
 
-/** The Focus page's timer block: ring with wings, session count, controls. */
+/** The Focus page's timer block: winged ring, session dots, durations, controls. */
 export function Pomodoro({ onSnapshot }: Props) {
   const pom = usePomodoro(onSnapshot);
   const { phase } = pom;
-
-  const label = t(phase === "idle" ? "pom.ready" : phase === "focus" ? "pom.focusTime" : "pom.breakTime");
+  const dots = Math.max(DAILY_FOCUS_GOAL, pom.sessionsToday);
 
   return (
     <div className="pomodoro">
-      <FocusRing seconds={pom.seconds} total={pom.total} phase={phase} size="lg" />
-      <div className="pomodoro__status">
-        {label} · {t(pom.sessionsToday === 1 ? "pom.session" : "pom.sessions", { count: pom.sessionsToday })}
+      <Wings size="lg">
+        <FocusRing seconds={pom.seconds} total={pom.total} phase={phase} size="lg" />
+      </Wings>
+
+      <div
+        className="session-dots"
+        role="img"
+        aria-label={t(pom.sessionsToday === 1 ? "pom.session" : "pom.sessions", { count: pom.sessionsToday })}
+      >
+        {Array.from({ length: dots }, (_, i) => (
+          <span key={i} className={`session-dot${i < pom.sessionsToday ? " session-dot--done" : ""}`} />
+        ))}
       </div>
+
+      <p className="pomodoro__durations">
+        {t("pom.durations", { focus: pom.focusMinutes, rest: pom.breakMinutes })}
+      </p>
+
       <div className="pomodoro__controls">
         {phase === "idle" ? (
-          <button type="button" className="chunky chunky--primary chunky--lg" onClick={() => pom.send("start")}>
+          <ChunkyButton size="lg" onClick={() => pom.send("start")}>
             {t("pom.start")}
-          </button>
+          </ChunkyButton>
         ) : (
-          <button
-            type="button"
-            className="chunky chunky--secondary chunky--lg"
-            onClick={() => pom.send(phase === "focus" ? "stop" : "skip")}
-          >
+          <ChunkyButton size="lg" variant="secondary" onClick={() => pom.send(phase === "focus" ? "stop" : "skip")}>
             {t(phase === "focus" ? "pom.stop" : "pom.skip")}
-          </button>
+          </ChunkyButton>
         )}
       </div>
     </div>

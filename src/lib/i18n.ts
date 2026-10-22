@@ -141,8 +141,9 @@ const en = {
   "pom.start": "Start",
   "pom.stop": "Stop",
   "pom.skip": "Skip break",
-  "pom.todaySessions": "today's sessions",
-  "pom.none": "No sessions yet today.",
+  "pom.todaySessions": "Today's sessions",
+  "pom.durations": "Focus {focus} min · break {rest} min",
+  "pom.none": "No sessions yet today. Start one above; it keeps running even if you close this window.",
   "pom.completed": "Completed · {min} min",
   "pom.stopped": "Stopped early · {min} min",
 
@@ -330,8 +331,9 @@ const id: Record<I18nKey, string> = {
   "pom.start": "Mulai",
   "pom.stop": "Berhenti",
   "pom.skip": "Lewati istirahat",
-  "pom.todaySessions": "sesi hari ini",
-  "pom.none": "Belum ada sesi hari ini.",
+  "pom.todaySessions": "Sesi hari ini",
+  "pom.durations": "Fokus {focus} menit · istirahat {rest} menit",
+  "pom.none": "Belum ada sesi hari ini. Mulai di atas; tetap jalan walau jendela ini ditutup.",
   "pom.completed": "Selesai · {min} menit",
   "pom.stopped": "Berhenti lebih awal · {min} menit",
 

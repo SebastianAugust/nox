@@ -744,3 +744,74 @@
   color: var(--text-dim);
   font-size: var(--fs-base);
 }
+
+/* ── Focus page ── */
+
+.focus-stage {
+  align-items: center;
+  padding: var(--sp-16) var(--sp-12);
+}
+
+.pomodoro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-8);
+}
+
+.session-dots {
+  display: flex;
+  gap: var(--sp-4);
+}
+
+.session-dot {
+  flex: none;
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: var(--r-pill);
+  background: var(--line);
+}
+
+.session-dot--done {
+  background: var(--accent);
+}
+
+.pomodoro__durations {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--fs-md);
+}
+
+.pomodoro__controls {
+  display: flex;
+  gap: var(--sp-4);
+}
+
+.session-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-7);
+  border-radius: var(--r-row);
+  background: var(--surface-2);
+}
+
+.session-row__text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-base);
+}
+
+.session-row__time {
+  color: var(--text-dim);
+  font-size: var(--fs-md);
+}

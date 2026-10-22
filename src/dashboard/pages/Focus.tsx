@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getTodayPomodoroSessions } from "../../lib/db-helpers";
 import { locale, t } from "../../lib/i18n";
 import Pomodoro from "../../components/Pomodoro";
-import { card, emptyText, rowBorder, sectionLabel } from "../../styles/shared";
+import { Card } from "../../components/ui/controls";
 
 export default function PagePomodoro() {
   const [sessions, setSessions] = useState<
@@ -23,46 +23,27 @@ export default function PagePomodoro() {
 
   return (
     <>
-      <div style={{ ...card, padding: "26px 16px" }}>
+      <section className="card focus-stage" aria-label={t("nav.pomodoro")}>
         <Pomodoro onSnapshot={load} />
-      </div>
+      </section>
 
-      <div>
-        <div style={sectionLabel}>{t("pom.todaySessions")}</div>
-        <div style={card}>
-          {sessions.length === 0 && (
-            <div style={emptyText}>{t("pom.none")}</div>
-          )}
-          {sessions.map((s, i, arr) => (
-            <div
-              key={s.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "8px 0",
-                ...rowBorder(i === arr.length - 1),
-              }}
-            >
-              <div
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  flexShrink: 0,
-                  background: s.completed ? "#00e5a0" : "rgba(255,255,255,0.15)",
-                }}
+      <Card title={t("pom.todaySessions")}>
+        {sessions.length === 0 && <p className="empty-line">{t("pom.none")}</p>}
+        <ul className="session-list">
+          {sessions.map((s) => (
+            <li key={s.id} className="session-row">
+              <span
+                className={`session-dot${s.completed ? " session-dot--done" : ""}`}
+                aria-hidden="true"
               />
-              <span style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", flex: 1 }}>
+              <span className="session-row__text">
                 {t(s.completed ? "pom.completed" : "pom.stopped", { min: s.duration_minutes })}
               </span>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
-                {formatClock(s.started_at)}
-              </span>
-            </div>
+              <span className="pixel session-row__time">{formatClock(s.started_at)}</span>
+            </li>
           ))}
-        </div>
-      </div>
+        </ul>
+      </Card>
     </>
   );
 }

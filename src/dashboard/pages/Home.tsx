@@ -17,7 +17,7 @@ import type { Appearance } from "../../lib/theme";
 import { pickSuggestion, type Suggestion } from "../../lib/homeMessage";
 import { habitStreak, shiftDay, type HabitLogMap } from "../../lib/streaks";
 import Pet from "../../components/Pet";
-import { FocusRing, usePomodoro } from "../../components/Pomodoro";
+import { DAILY_FOCUS_GOAL, FocusRing, usePomodoro } from "../../components/Pomodoro";
 import DialogBox from "../../components/ui/DialogBox";
 import { Card, ChunkyButton, StatCard, Tag } from "../../components/ui/controls";
 import { StreakEgg, Wings } from "../../components/deco/Deco";
@@ -28,7 +28,6 @@ import AddTodo from "../widgets/AddTodo";
 import WeekFootprints from "../widgets/WeekFootprints";
 import type { HabitRow } from "../widgets/HabitItem";
 
-const DAILY_FOCUS_GOAL = 4;
 const SNOOZE_MS = 60 * 60 * 1000;
 const STREAK_WINDOW_DAYS = 365; // per-habit "best" looks back this far
 
