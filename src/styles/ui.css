@@ -2,6 +2,11 @@
 
 /* ── Base ─────────────────────────────────────────────────────────────── */
 
+/* Native controls (checkboxes, time and date fields) render dark. */
+:root {
+  color-scheme: dark;
+}
+
 button,
 input,
 select {
@@ -513,6 +518,7 @@ button:disabled {
 
 .card__head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: var(--sp-6);

@@ -58,6 +58,18 @@
   min-width: 0;
 }
 
+/* Narrow: logo and buttons share the first row, the nav gets its own. */
+@media (max-width: 860px) {
+  .topbar__logo {
+    margin-right: auto;
+  }
+
+  .topbar__nav {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+
 .nav-pills {
   display: flex;
   flex-wrap: wrap;
@@ -110,7 +122,7 @@
 
 .page-header {
   position: relative;
-  padding: calc(var(--control-sm) + var(--sp-7) + var(--sp-10)) var(--sp-12) var(--sp-16);
+  padding: calc(var(--topbar-h, 62px) + var(--sp-4)) var(--sp-12) var(--sp-16);
 }
 
 .page-header__content {
@@ -814,4 +826,30 @@
 .session-row__time {
   color: var(--text-dim);
   font-size: var(--fs-md);
+}
+
+/* ── Todos page ── */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+}
+
+.empty-state--inline {
+  border: 0;
+  padding: var(--sp-12) var(--sp-8);
+}
+
+.reminder__icon {
+  font-size: var(--fs-lg);
+  color: var(--accent);
+}
+
+.reminder--sent .reminder__icon,
+.reminder--sent .session-row__text {
+  color: var(--text-dim);
 }

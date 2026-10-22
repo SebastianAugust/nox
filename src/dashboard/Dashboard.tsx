@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { t, useLanguage } from "../lib/i18n";
@@ -17,11 +17,23 @@ import PageSettings from "./pages/Settings";
 export function Dashboard() {
   const [page, setPage] = useState<Page>("home");
   const [scrolled, setScrolled] = useState(false);
+  const shellRef = useRef<HTMLDivElement>(null);
   useLanguage(); // re-render every string when the language setting changes
   const appearance = useAppearance();
 
   // A new page starts at the top, under a see-through bar.
   useEffect(() => setScrolled(false), [page]);
+
+  // The bar floats over the page, so headers pad by its real height (it
+  // grows when the nav wraps onto a second row).
+  useEffect(() => {
+    const shell = shellRef.current;
+    const bar = shell?.querySelector<HTMLElement>(".topbar");
+    if (!shell || !bar) return;
+    const observer = new ResizeObserver(() => shell.style.setProperty("--topbar-h", `${bar.offsetHeight}px`));
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
 
   // Escape closes the window; 1-7 jump to a page. Both are ignored while a
   // field has focus, so typing a habit called "2 km run" still works and
@@ -46,7 +58,7 @@ export function Dashboard() {
   }, []);
 
   return (
-    <div className="dash">
+    <div className="dash" ref={shellRef}>
       <TopBar page={page} onNavigate={setPage} solid={scrolled} />
       <div
         key={page}
