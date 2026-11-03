@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   getHabitLogsSince,
   getHabitStreaks,
+  getOpenAssignments,
   getSetting,
   getTodayHabitLogs,
   getTodayStats,
@@ -10,9 +11,15 @@ import {
   logHabit,
   setTodoStatus,
   todayLocal,
+  type AssignmentRow,
   type TodayStats,
 } from "../../lib/db-helpers";
 import { locale, t } from "../../lib/i18n";
+import { urgency } from "../../lib/deadlines";
+import { urgencyText } from "../../lib/commands";
+import { getWeather, weatherKind, type WeatherState } from "../../lib/weather";
+import { listen } from "@tauri-apps/api/event";
+import { PlaceSelect } from "../widgets/Places";
 import type { Appearance } from "../../lib/theme";
 import { pickSuggestion, type Suggestion } from "../../lib/homeMessage";
 import { habitStreak, shiftDay, type HabitLogMap } from "../../lib/streaks";
@@ -46,10 +53,12 @@ type HomeData = {
   streaks: { current: number; best: number };
   logs: HabitLogMap;
   upcoming: Upcoming[];
+  assignments: AssignmentRow[];
+  notionSetUp: boolean;
 };
 
 async function loadHome(): Promise<HomeData> {
-  const [name, todos, stats, habits, streaks, logs, upcoming] = await Promise.all([
+  const [name, todos, stats, habits, streaks, logs, upcoming, assignments, notionDb] = await Promise.all([
     getSetting("user_name"),
     getTodosFiltered("pending", 500),
     getTodayStats(),
@@ -57,6 +66,8 @@ async function loadHome(): Promise<HomeData> {
     getHabitStreaks(),
     getHabitLogsSince(STREAK_WINDOW_DAYS),
     getUpcoming(30),
+    getOpenAssignments(7, 30),
+    getSetting("notion_assignments_db_id"),
   ]);
   return {
     name: name?.trim() || "Bas",
@@ -66,6 +77,8 @@ async function loadHome(): Promise<HomeData> {
     streaks,
     logs,
     upcoming,
+    assignments,
+    notionSetUp: !!notionDb,
   };
 }
 
@@ -78,18 +91,26 @@ function greetingKey(hour: number) {
 
 export default function PageHome({ appearance }: { appearance: Appearance }) {
   const [data, setData] = useState<HomeData | null>(null);
+  const [weather, setWeather] = useState<WeatherState | null>(null);
   const [, setSnoozeTick] = useState(0);
   const pom = usePomodoro();
 
+  // Cached data first; a failed refresh keeps showing the last reading (stale).
   const load = useCallback(() => {
     loadHome().then(setData).catch(console.error);
+    getWeather().then(setWeather).catch(console.error);
   }, []);
 
   // Load now and whenever the window comes back, so Nox's message is fresh.
   useEffect(() => {
     load();
     window.addEventListener("focus", load);
-    return () => window.removeEventListener("focus", load);
+    // A place switch (chip, Settings, /lokasi, a Telegram pin) shows at once.
+    const unlisten = listen("settings:changed", () => getWeather().then(setWeather).catch(console.error));
+    return () => {
+      window.removeEventListener("focus", load);
+      unlisten.then((off) => off()).catch(console.error);
+    };
   }, [load]);
 
   // Completed sessions change the summary row.
@@ -136,7 +157,10 @@ export default function PageHome({ appearance }: { appearance: Appearance }) {
             <div className="perch__rock" />
           </div>
           <div className="hero__text">
-            <h1 className="page-title">{t(greetingKey(new Date().getHours()), { name: data.name })}</h1>
+            <div className="hero__title-row">
+              <h1 className="page-title">{t(greetingKey(new Date().getHours()), { name: data.name })}</h1>
+              {weather && <WeatherChip weather={weather} />}
+            </div>
             <DialogBox
               actions={
                 suggestion.kind !== "idle" && (
@@ -245,9 +269,61 @@ export default function PageHome({ appearance }: { appearance: Appearance }) {
           </div>
         </div>
 
+        <DeadlineRadar assignments={data.assignments} setUp={data.notionSetUp} />
+
         <NextDays upcoming={data.upcoming} today={today} />
       </main>
     </>
+  );
+}
+
+/** The reading plus a quick switch between saved places. */
+function WeatherChip({ weather }: { weather: WeatherState }) {
+  const d = weather.data;
+  const kind = weatherKind(d.weatherCode, d.isDay);
+  const temp = Math.round(d.temperature);
+  return (
+    <span className={`weather-chip${weather.stale ? " weather-chip--stale" : ""}`}>
+      <span
+        className="weather-chip__reading"
+        role="img"
+        aria-label={t("home.weatherLabel", { what: t(kind.label), temp }) + (weather.stale ? ` (${t("home.weatherOld")})` : "")}
+      >
+        <i className={`ti ${kind.icon}`} aria-hidden="true" />
+        <span className="weather-chip__temp">{temp}°</span>
+        <span className="weather-chip__what">
+          {t(kind.label)}
+          {weather.stale && ` · ${t("home.weatherOld")}`}
+        </span>
+      </span>
+      <PlaceSelect className="weather-chip__place" />
+    </span>
+  );
+}
+
+/** Notion assignments due in the next 7 days plus overdue, soonest first. */
+function DeadlineRadar({ assignments, setUp }: { assignments: AssignmentRow[]; setUp: boolean }) {
+  const now = new Date();
+  return (
+    <Card title={t("home.radar")} meta={t("home.radarMeta")}>
+      {assignments.length === 0 ? (
+        <p className="empty-line">{t(setUp ? "home.radarEmpty" : "home.radarSetup")}</p>
+      ) : (
+        <ul className="radar">
+          {assignments.map((a) => {
+            const u = urgency(a.due_date, now);
+            const tone = u.kind === "overdue" ? "overdue" : u.kind === "today" || u.kind === "tomorrow" ? "warn" : "neutral";
+            return (
+              <li key={a.notion_id} className={`radar__row${u.kind === "overdue" ? " radar__row--overdue" : ""}`}>
+                <Tag tone={tone}>{urgencyText(u, t)}</Tag>
+                <span className="radar__name">{a.name}</span>
+                {a.course && <span className="radar__course">{a.course}</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
   );
 }
 

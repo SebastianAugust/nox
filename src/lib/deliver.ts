@@ -12,8 +12,10 @@ import { getPomodoroSnapshot, subscribePomodoro } from "./pomodoroEngine";
  *   reminder   never held: bubble + toast when the pet can show it, otherwise
  *              (hidden, streaming, in a pomodoro) a toast only
  *   checkin,   held in a queue while blocked, then shown oldest first, one at
- *   friction,  a time; check-ins and nudges older than STALE_MS are dropped
- *   recap
+ *   friction,  a time; check-ins and idle nudges older than STALE_MS are
+ *   recap,     dropped. A queued deadline nudge is merged with a newer one,
+ *   briefing,  never replaced, since each was already recorded as sent.
+ *   nudge
  *   system     shown when the pet is free, otherwise dropped (pomodoro
  *              phase messages are system, so a focus session does not block it)
  *
@@ -21,9 +23,14 @@ import { getPomodoroSnapshot, subscribePomodoro } from "./pomodoroEngine";
  * chat input focused, or the pet window hidden.
  */
 
-export type DeliveryKind = "reminder" | "checkin" | "friction" | "recap" | "system";
+export type DeliveryKind = "reminder" | "checkin" | "friction" | "recap" | "briefing" | "nudge" | "system";
 
-export type Delivery = { kind: DeliveryKind; text: string };
+export type Delivery = {
+  kind: DeliveryKind;
+  text: string;
+  /** For a deadline nudge: what "Start focus" should focus on. */
+  focusContext?: string;
+};
 
 type Queued = Delivery & { at: number };
 
@@ -89,9 +96,15 @@ export async function deliver(item: Delivery): Promise<boolean> {
     return !(await blocked(false)) && show(item);
   }
 
-  // One pending entry per kind: a later check-in replaces the queued one.
+  // One pending entry per kind: a later check-in replaces the queued one;
+  // deadline nudges add up instead.
+  const prev = queue.find((q) => q.kind === item.kind);
+  const next =
+    item.kind === "nudge" && prev
+      ? { ...item, text: `${prev.text}\n${item.text}`, focusContext: prev.focusContext ?? item.focusContext }
+      : item;
   queue = queue.filter((q) => q.kind !== item.kind);
-  queue.push({ ...item, at: Date.now() });
+  queue.push({ ...next, at: Date.now() });
   scheduleFlush(0);
   return false;
 }

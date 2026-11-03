@@ -9,17 +9,14 @@ import CheckinPrompt from "./components/CheckinPrompt";
 import { ChunkyButton } from "./components/ui/controls";
 import { chat, HISTORY_LIMIT, type ChatMessage } from "./lib/ollama";
 import { getDb } from "./lib/db";
-import {
-  addReminder,
-  addTodo,
-  clearConversation,
-  getRecentMessages,
-  getSetting,
-  saveChatTurn,
-  setSetting,
-} from "./lib/db-helpers";
-import { describeDue, parseRemindArgs, parseTodoArgs } from "./lib/commands";
+import { getRecentMessages, getSetting, saveChatTurn, setSetting } from "./lib/db-helpers";
+import { parseCommand, renderResult } from "./lib/commands";
+import { runCommand } from "./lib/commandRunner";
 import { t, useLanguage } from "./lib/i18n";
+import { startNotionSync } from "./lib/notionSync";
+import { startBriefingScheduler } from "./lib/briefingScheduler";
+import { startNudgeScheduler } from "./lib/nudgeScheduler";
+import { pushTelegram, startTelegram } from "./lib/telegram";
 import { useAppearance } from "./lib/theme";
 import { saveCheckin, startCheckinScheduler, type Mood } from "./lib/checkin";
 import { recordInteraction, startFrictionDetector } from "./lib/friction";
@@ -77,6 +74,8 @@ function App() {
   // The bubble text that offers Start focus / Later; actions show only while
   // the bubble still says exactly that.
   const [actionsFor, setActionsFor] = useState<string | null>(null);
+  // What that bubble's "Start focus" is about (a deadline nudge's assignment).
+  const focusContextRef = useRef<string | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
   const revertTimerRef = useRef<number | null>(null);
@@ -213,12 +212,18 @@ function App() {
   // How each kind of delivered message looks once deliver() lets it through.
   useEffect(
     () =>
-      startDelivery(({ kind, text }: Delivery) => {
+      startDelivery(({ kind, text, focusContext }: Delivery) => {
         switch (kind) {
           case "reminder":
+          case "nudge":
             clearRevert();
             flashState("alert", 20000);
+            focusContextRef.current = focusContext;
             setActionsFor(text);
+            break;
+          case "briefing":
+            clearRevert();
+            flashState("happy", 15000);
             break;
           case "checkin":
             setPetState("alert");
@@ -272,21 +277,43 @@ function App() {
     [],
   );
 
-  // Reminders saved by /remind come back here when their time arrives.
+  // Reminders saved by /ingat come back here when their time arrives. The pet
+  // (bubble or toast) decides whether one counts as delivered; Telegram only
+  // gets a copy, so a reminder never depends on it.
   useEffect(
     () =>
-      startReminderPoller((titles, grouped) =>
-        deliver({
-          kind: "reminder",
-          text: grouped
-            ? t("pet.remindersMissed", { n: titles.length })
-            : t(titles.length === 1 ? "pet.reminder" : "pet.reminders", {
-                titles: titles.join(" · "),
-              }),
-        }),
-      ),
+      startReminderPoller(async (titles, grouped) => {
+        const text = grouped
+          ? t("pet.remindersMissed", { n: titles.length })
+          : t(titles.length === 1 ? "pet.reminder" : "pet.reminders", {
+              titles: titles.join(" · "),
+            });
+        const delivered = await deliver({ kind: "reminder", text });
+        if (delivered) void pushTelegram("reminders", text);
+        return delivered;
+      }),
     [],
   );
+
+  // Phase 2: Notion sync, deadline nudges, the morning briefing, Telegram.
+  useEffect(() => {
+    const nudges = startNudgeScheduler(({ text, focusContext }) => {
+      void deliver({ kind: "nudge", text, focusContext });
+      void pushTelegram("nudges", text);
+    });
+    const stopSync = startNotionSync(nudges.check);
+    const stopBriefing = startBriefingScheduler((text) => {
+      void deliver({ kind: "briefing", text });
+      void pushTelegram("briefing", text);
+    });
+    const stopTelegram = startTelegram();
+    return () => {
+      nudges.stop();
+      stopSync();
+      stopBriefing();
+      stopTelegram();
+    };
+  }, []);
 
   // Ambient face: when nothing is going on, doze off at night and wake up
   // otherwise. Busy states (thinking/alert/happy/excited) are left alone.
@@ -410,96 +437,22 @@ function App() {
   };
 
   /**
-   * Slash commands are handled locally and never reach Ollama — quick capture
-   * should be instant and work with the model offline.
-   * Returns true when the message was a command.
+   * Anything starting with "/" goes to the rigid command parser and never
+   * reaches Ollama, so quick capture is instant and works with the model
+   * off. Returns true when the message was a command.
    */
   const handleCommand = async (text: string): Promise<boolean> => {
-    const match = /^\/(\w+)\s*([\s\S]*)$/.exec(text);
-    if (!match) return false;
-    const [, command, rest] = match;
-    const arg = rest.trim();
+    const cmd = parseCommand(text);
+    if (!cmd) return false;
+    const result = await runCommand(cmd, "pet");
 
-    switch (command) {
-      case "todo": {
-        if (!arg) {
-          setBubbleText(t("cmd.todo.empty"));
-          break;
-        }
-        const { title, due_date } = parseTodoArgs(arg);
-        if (!title) {
-          setBubbleText(t("cmd.todo.onlyDate"));
-          break;
-        }
-        try {
-          await addTodo({ title, due_date, context: "personal" });
-          flashState("excited");
-          setBubbleText(
-            due_date
-              ? t("cmd.todo.addedDue", {
-                  title,
-                  due: describeDue(due_date, {
-                    today: t("date.today"),
-                    tomorrow: t("date.tomorrow"),
-                  }),
-                })
-              : t("cmd.todo.added", { title }),
-          );
-        } catch (err) {
-          console.error(err);
-          setBubbleText(t("cmd.saveFailed"));
-        }
-        break;
-      }
-      case "remind": {
-        if (!arg) {
-          setBubbleText(t("cmd.remind.empty"));
-          break;
-        }
-        const parsed = parseRemindArgs(arg);
-        try {
-          if (parsed.remind_at) {
-            await addReminder({ title: parsed.title, remind_at: parsed.remind_at });
-            flashState("excited");
-            setBubbleText(
-              t("cmd.remind.set", {
-                title: parsed.title,
-                when: parsed.tomorrow
-                  ? t("cmd.remind.tomorrowAt", { clock: parsed.clock ?? "" })
-                  : (parsed.clock ?? ""),
-              }),
-            );
-          } else {
-            // No time in there — keep it rather than lose it, as a todo.
-            await addTodo({ title: parsed.title, notes: "reminder", context: "personal" });
-            flashState("excited");
-            setBubbleText(t("cmd.remind.asTodo", { title: parsed.title }));
-          }
-        } catch (err) {
-          console.error(err);
-          setBubbleText(t("cmd.saveFailed"));
-        }
-        break;
-      }
-      case "clear":
-        try {
-          await clearConversation();
-          setMessages([]);
-          setBubbleText(t("cmd.clear.done"));
-        } catch (err) {
-          console.error(err);
-          setBubbleText(t("cmd.saveFailed"));
-        }
-        break;
-      case "dashboard":
-        // The pet hides itself while the dashboard is open.
-        invoke("show_dashboard").catch(console.error);
-        break;
-      case "help":
-        setBubbleText(t("cmd.help"));
-        break;
-      default:
-        setBubbleText(t("cmd.unknown"));
+    if (result.kind === "dashboard") {
+      // The pet hides itself while the dashboard is open.
+      invoke("show_dashboard").catch(console.error);
+    } else {
+      if (result.kind === "cleared") setMessages([]);
+      if (["todoAdded", "todoDone", "reminderSet", "focusStarted"].includes(result.kind)) flashState("excited");
+      setBubbleText(renderResult(result, t));
     }
 
     setOpen(false);
@@ -561,7 +514,9 @@ function App() {
   const startFocusFromBubble = () => {
     touch();
     setActionsFor(null);
-    emit("pomodoro:cmd", { type: "start" } satisfies PomCommand).catch(console.error);
+    emit("pomodoro:cmd", { type: "start", context: focusContextRef.current } satisfies PomCommand).catch(
+      console.error,
+    );
   };
 
   const later = () => {

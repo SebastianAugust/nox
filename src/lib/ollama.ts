@@ -148,6 +148,36 @@ type OllamaEvent =
 let nextRequestId = 1;
 
 /**
+ * One short reply with a hard deadline, or null (Ollama off, slow, cut off or
+ * failing). Used for the briefing's friendly opener; callers always have a
+ * static fallback, so nothing depends on the model.
+ */
+export function quickReply(prompt: string, timeoutMs: number): Promise<string | null> {
+  const controller = new AbortController();
+  let expired = false;
+  const timer = setTimeout(() => {
+    expired = true;
+    controller.abort();
+  }, timeoutMs);
+  return new Promise((resolve) => {
+    void chat(
+      prompt,
+      [],
+      controller,
+      () => {},
+      (reply, cutOff) => {
+        clearTimeout(timer);
+        resolve(expired || cutOff || !reply.trim() ? null : reply.trim());
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(null);
+      },
+    );
+  });
+}
+
+/**
  * Stream a chat completion from Ollama.
  *
  * The HTTP request runs in Rust (`ollama_chat`), not in the webview: a release

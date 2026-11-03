@@ -32,23 +32,30 @@ export function SettingRow({
 
 /**
  * A text setting as a real bordered field. Saves on Enter or when focus
- * leaves; Escape puts the saved value back. Empty input is not saved.
+ * leaves; Escape puts the saved value back. Empty input is not saved unless
+ * `allowEmpty` (then empty means "automatic" or "none").
  */
 export function TextSetting({
   id,
   value,
   onSave,
+  allowEmpty,
+  placeholder,
+  describedBy,
 }: {
   id: string;
   value: string;
   onSave: (v: string) => void;
+  allowEmpty?: boolean;
+  placeholder?: string;
+  describedBy?: string;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
 
   const commit = () => {
     const next = draft.trim();
-    if (!next) return setDraft(value);
+    if (!next && !allowEmpty) return setDraft(value);
     if (next !== value) onSave(next);
   };
 
@@ -56,6 +63,8 @@ export function TextSetting({
     <input
       id={id}
       className="field"
+      placeholder={placeholder}
+      aria-describedby={describedBy}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}

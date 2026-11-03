@@ -22,8 +22,13 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# Plain HTTP to the local Ollama server only, so no TLS backend.
-reqwest = { version = "0.13", default-features = false }
+# Ollama (plain HTTP) plus Notion, Open-Meteo and Telegram over HTTPS. TLS is
+# Windows' own Schannel (native-tls), so no extra build tools are needed.
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "query"] }
+# API tokens live in Windows Credential Manager, never in the database.
+keyring = { version = "3", features = ["windows-native"] }
+tokio = { version = "1", features = ["time", "sync"] }
+getrandom = "0.3"
 tauri-plugin-notification = "2"
 
 # Same sqlx as tauri-plugin-sql, to read settings from Rust at startup.

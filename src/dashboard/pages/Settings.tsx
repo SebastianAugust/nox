@@ -8,6 +8,7 @@ import { useReducedMotion } from "../../components/deco/NightSky";
 import { Card, Toggle } from "../../components/ui/controls";
 import { NAV_ITEMS } from "../nav";
 import { SettingRow, TextSetting } from "../widgets/SettingControls";
+import { PlacesManager } from "../widgets/Places";
 
 const TEXT_SETTINGS = [
   { key: "user_name", label: "set.userName" },
@@ -16,8 +17,8 @@ const TEXT_SETTINGS = [
   { key: "user_timezone", label: "set.timezone" },
 ] as const;
 
-// Daily briefing (toggle + time) is hidden until it is wired in Phase 2, which
-// seeds its settings in a new migration.
+// The morning briefing and deadline nudges are set on the Integrations page,
+// next to the services they read from.
 const FEATURE_SETTINGS = [
   { key: "body_checkin_enabled", label: "set.checkin" },
   { key: "dnd_during_pomodoro", label: "set.dnd" },
@@ -160,6 +161,11 @@ export default function PageSettings() {
             </SettingRow>
           ))}
         </div>
+      </Card>
+
+      <Card title={t("set.places")}>
+        <p className="muted">{t("set.places.hint")}</p>
+        <PlacesManager />
       </Card>
 
       <Card title={t("set.appearance")}>

@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nox dashboard — Night Lair</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&amp;family=Pixelify+Sans:wght@500;600;700&amp;family=Nunito:wght@600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0E1C}
+a{color:#3EF0A0}a:hover{color:#8BF7C8}
+button{font:inherit;cursor:pointer}
+input{font:inherit}
+@keyframes nox-twinkle{0%,100%{opacity:.25}50%{opacity:1}}
+@keyframes nox-moon{0%,100%{box-shadow:0 0 50px rgba(246,235,200,.16)}50%{box-shadow:0 0 95px rgba(246,235,200,.34)}}
+@keyframes nox-drift{from{transform:translateX(0)}to{transform:translateX(1700px)}}
+@keyframes nox-shoot{0%{opacity:0;transform:translate(0,0) rotate(20deg)}3%{opacity:1}12%{opacity:0;transform:translate(360px,130px) rotate(20deg)}100%{opacity:0;transform:translate(360px,130px) rotate(20deg)}}
+@keyframes nox-rise{0%{opacity:0;transform:translate(0,0)}15%{opacity:.9}100%{opacity:0;transform:translate(14px,-170px)}}
+@keyframes nox-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes nox-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<div style="min-height: 1040px; background: #0A0E1C; color: #EEF2FF; font-family: Nunito, system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <!-- ===== SKY HEADER ===== -->
+  <div style="position: relative; overflow: hidden; background: #0E1530; padding: 14px 14px 0 24px">
+    <!-- animated sky: drifting clouds + shooting star (behind everything) -->
+    <sc-if value="{{animate}}" hint-placeholder-val="{{ true }}">
+      <span aria-hidden="true" style="position: absolute; left: -220px; top: 150px; width: 200px; height: 36px; border-radius: 18px; background: #16204A; opacity: 0.7; animation: nox-drift 80s linear infinite"></span>
+      <span aria-hidden="true" style="position: absolute; left: -220px; top: 64px; width: 130px; height: 26px; border-radius: 13px; background: #142046; opacity: 0.6; animation: nox-drift 110s linear infinite -50s"></span>
+      <span aria-hidden="true" style="position: absolute; left: 28%; top: 18px; width: 90px; height: 2px; border-radius: 1px; background: linear-gradient(90deg, rgba(246,235,200,0), #F6EBC8); opacity: 0; animation: nox-shoot 11s ease-out infinite 2s"></span>
+    </sc-if>
+    <span aria-hidden="true" style="position: absolute; left: 10%; top: 34px; width: 3px; height: 3px; background: #F6EBC8; animation: nox-twinkle 3.2s ease-in-out infinite"></span>
+    <span aria-hidden="true" style="position: absolute; left: 24%; top: 86px; width: 2px; height: 2px; background: #F6EBC8; animation: nox-twinkle 4.1s ease-in-out infinite 1.2s"></span>
+    <span aria-hidden="true" style="position: absolute; left: 47%; top: 26px; width: 4px; height: 4px; background: {{accent}}; animation: nox-twinkle 2.6s ease-in-out infinite 0.4s"></span>
+    <span aria-hidden="true" style="position: absolute; left: 58%; top: 110px; width: 2px; height: 2px; background: #F6EBC8; animation: nox-twinkle 3.7s ease-in-out infinite 2s"></span>
+    <span aria-hidden="true" style="position: absolute; left: 71%; top: 46px; width: 3px; height: 3px; background: #F6EBC8; animation: nox-twinkle 4.6s ease-in-out infinite 0.8s"></span>
+    <span aria-hidden="true" style="position: absolute; left: 36%; top: 140px; width: 2px; height: 2px; background: #F6EBC8; animation: nox-twinkle 3s ease-in-out infinite 1.6s"></span>
+    <span aria-hidden="true" style="position: absolute; left: 90%; top: 150px; width: 3px; height: 3px; background: #F6EBC8; animation: nox-twinkle 3.9s ease-in-out infinite 2.4s"></span>
+    <span aria-hidden="true" style="position: absolute; right: 8%; top: 56px; width: 70px; height: 70px; border-radius: 35px; background: #F6EBC8; animation: nox-moon 7s ease-in-out infinite"></span>
+    <span aria-hidden="true" style="position: absolute; right: calc(8% - 16px); top: 46px; width: 66px; height: 66px; border-radius: 33px; background: #0E1530"></span>
+
+    <!-- top bar -->
+    <div style="position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 14px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span aria-hidden="true" style="display: flex; gap: 4px"><span style="width: 9px; height: 13px; border-radius: 50%; background: {{accent}}; display: flex; justify-content: center; align-items: center"><span style="width: 2px; height: 9px; border-radius: 1px; background: #05070F"></span></span><span style="width: 9px; height: 13px; border-radius: 50%; background: {{accent}}; display: flex; justify-content: center; align-items: center"><span style="width: 2px; height: 9px; border-radius: 1px; background: #05070F"></span></span></span>
+        <span style="font-family: Fredoka, sans-serif; font-weight: 700; font-size: 22px">nox</span>
+      </div>
+      <nav aria-label="Main" style="flex: 1; display: flex; justify-content: center">
+        <div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 5px; border-radius: 999px; background: rgba(10,14,28,0.75); border: 1px solid #263055">
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; background: {{accent}}; color: #06261A; text-decoration: none; font-weight: 800; font-size: 14px">Home</a>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Habits</a>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Focus</a>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Todos</a>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Recap</a>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Integrations</a>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Settings</a>
+        </div>
+      </nav>
+      <div style="display: flex; gap: 6px">
+        <button aria-label="Minimize" style="width: 34px; height: 34px; border-radius: 17px; border: 0; background: rgba(10,14,28,0.75); color: #AEB8D6; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></button>
+        <button aria-label="Close" style="width: 34px; height: 34px; border-radius: 17px; border: 0; background: rgba(10,14,28,0.75); color: #AEB8D6; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></button>
+      </div>
+    </div>
+
+    <!-- hero -->
+    <div style="position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 28px; padding-top: 26px; max-width: 1120px">
+      <!-- sprite on perch -->
+      <div style="display: flex; flex-direction: column; align-items: center">
+        <div style="position: relative; width: 140px; height: 140px; border-radius: 42px; background: rgba(10,14,28,0.55); border: 2px dashed #3A4675; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 0 46px rgba(62,240,160,0.14); animation: nox-bob 4s ease-in-out infinite">
+          <div aria-hidden="true" style="display: flex; gap: 20px">
+            <span style="width: 16px; height: 22px; border-radius: 50%; background: {{accent}}; box-shadow: 0 0 14px {{accent}}; display: flex; justify-content: center; align-items: center; animation: nox-blink 5s infinite"><span style="width: 3px; height: 16px; border-radius: 2px; background: #05070F"></span></span>
+            <span style="width: 16px; height: 22px; border-radius: 50%; background: {{accent}}; box-shadow: 0 0 14px {{accent}}; display: flex; justify-content: center; align-items: center; animation: nox-blink 5s infinite"><span style="width: 3px; height: 16px; border-radius: 2px; background: #05070F"></span></span>
+          </div>
+          <span style="font-size: 11px; color: #AEB8D6; font-weight: 800">your sprite</span>
+          <sc-if value="{{showProgress}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; top: -12px; right: -10px; font-family: 'Pixelify Sans', monospace; font-size: 13px; padding: 2px 8px; background: #FFD25A; color: #2A1E05; border: 2px solid #05070F">LV 3</span></sc-if>
+        </div>
+        <div aria-hidden="true" style="width: 210px; height: 36px; margin-top: -6px; background: #1A2242; border-radius: 60px 80px 0 0; background-image: radial-gradient(circle at 50% 100%, transparent 7px, rgba(62,240,160,0.10) 8px, transparent 9px); background-size: 18px 10px"></div>
+      </div>
+
+      <!-- RPG dialog -->
+      <div style="flex: 1 1 400px; min-width: 0; padding-bottom: 30px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+          <h1 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 32px">Evening, Bas</h1>
+          <sc-if value="{{showProgress}}" hint-placeholder-val="{{ false }}">
+          <span style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 14px; background: #2B2414; color: #FFC27A; font-weight: 800; font-size: 13px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#FFA94D" aria-hidden="true"><path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-7 0 2 1 3 3 3-1-3 0-6 0-8z"></path></svg>
+            120 embers
+          </span>
+          </sc-if>
+        </div>
+        <div style="position: relative; max-width: 640px; margin-top: 10px; padding: 18px 18px 14px; background: #070A14; border: 3px solid #EEF2FF; box-shadow: inset 0 0 0 3px #070A14, inset 0 0 0 5px #2E3A66, 6px 6px 0 rgba(0,0,0,0.4)">
+          <span style="position: absolute; left: 14px; top: -16px; padding: 2px 10px; background: {{accent}}; color: #06261A; font-family: 'Pixelify Sans', monospace; font-size: 15px; font-weight: 700; border: 3px solid #05070F">NOX</span>
+          <p style="margin: 0 0 12px; font-size: 16px; line-height: 1.55; font-weight: 700"><span style="color: #FF8A8A; font-weight: 800">laporan robotik</span> is 2 days overdue. Want to work on it for 25 minutes now? I'll keep everything else quiet.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px">
+            <button style="height: 44px; padding: 0 20px; border-radius: 22px; border: 0; background: {{accent}}; color: #06261A; font-weight: 800; font-size: 15px; box-shadow: 0 5px 0 #1C8A5B">Start focus · 25 min</button>
+            <button style="height: 44px; padding: 0 18px; border-radius: 22px; border: 2px solid #3A4675; background: transparent; color: #EEF2FF; font-weight: 700; font-size: 15px">Later</button>
+          </div>
+          <span aria-hidden="true" style="position: absolute; right: 12px; bottom: 8px; font-size: 11px; color: {{accent}}">&#9660;</span>
+        </div>
+      </div>
+    </div>
+    <!-- rising embers -->
+    <sc-if value="{{animate}}" hint-placeholder-val="{{ true }}">
+      <span aria-hidden="true" style="position: absolute; left: 18%; bottom: 14px; width: 4px; height: 4px; background: #FFA94D; opacity: 0; animation: nox-rise 6s ease-in infinite"></span>
+      <span aria-hidden="true" style="position: absolute; left: 34%; bottom: 10px; width: 3px; height: 3px; background: #FFC27A; opacity: 0; animation: nox-rise 7.5s ease-in infinite 1.5s"></span>
+      <span aria-hidden="true" style="position: absolute; left: 52%; bottom: 16px; width: 4px; height: 4px; background: #FFA94D; opacity: 0; animation: nox-rise 6.8s ease-in infinite 3s"></span>
+      <span aria-hidden="true" style="position: absolute; left: 68%; bottom: 12px; width: 3px; height: 3px; background: {{accent}}; opacity: 0; animation: nox-rise 8s ease-in infinite 0.8s"></span>
+      <span aria-hidden="true" style="position: absolute; left: 84%; bottom: 14px; width: 4px; height: 4px; background: #FFC27A; opacity: 0; animation: nox-rise 7s ease-in infinite 4.2s"></span>
+    </sc-if>
+    <!-- scaled horizon -->
+    <div aria-hidden="true" style="height: 22px; margin: 0 -14px 0 -24px; background-color: #0A0E1C; background-image: radial-gradient(circle at 50% 100%, transparent 9px, #1A2242 10px, transparent 11px), radial-gradient(circle at 50% 100%, transparent 9px, #1A2242 10px, transparent 11px); background-size: 22px 12px; background-position: 0 0, 11px 6px; border-radius: 50% 50% 0 0 / 100% 100% 0 0"></div>
+  </div>
+
+  <!-- ===== BODY ===== -->
+  <main style="flex: 1; box-sizing: border-box; width: 100%; max-width: 1240px; padding: 12px 24px 36px; display: flex; flex-direction: column; gap: 18px">
+
+    <!-- HUD -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px">
+      <sc-if value="{{showProgress}}" hint-placeholder-val="{{ false }}">
+      <div style="padding: 14px 16px; border-radius: 20px; background: #141B33; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; font-family: 'Pixelify Sans', monospace; font-size: 15px; color: #AEB8D6"><span>ENERGY</span><span style="color: #EEF2FF">4/10</span></div>
+        <div role="img" aria-label="Energy 4 of 10" style="display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px">
+          <span style="height: 12px; border-radius: 2px; background: {{accent}}"></span><span style="height: 12px; border-radius: 2px; background: {{accent}}"></span><span style="height: 12px; border-radius: 2px; background: {{accent}}"></span><span style="height: 12px; border-radius: 2px; background: {{accent}}"></span><span style="height: 12px; border-radius: 2px; background: #263055"></span><span style="height: 12px; border-radius: 2px; background: #263055"></span><span style="height: 12px; border-radius: 2px; background: #263055"></span><span style="height: 12px; border-radius: 2px; background: #263055"></span><span style="height: 12px; border-radius: 2px; background: #263055"></span><span style="height: 12px; border-radius: 2px; background: #263055"></span>
+        </div>
+        <div style="font-size: 12px; color: #AEB8D6">habits feed Nox</div>
+      </div>
+      <div style="padding: 14px 16px; border-radius: 20px; background: #141B33; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; font-family: 'Pixelify Sans', monospace; font-size: 15px; color: #AEB8D6"><span>LV 3 → 4</span><span style="color: #EEF2FF">120/200</span></div>
+        <div role="img" aria-label="Experience 6 of 10" style="display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px">
+          <span style="height: 12px; border-radius: 2px; background: #FFA94D"></span><span style="height: 12px; border-radius: 2px; background: #FFA94D"></span><span style="height: 12px; border-radius: 2px; background: #FFA94D"></span><span style="height: 12px; border-radius: 2px; background: #FFA94D"></span><span style="height: 12px; border-radius: 2px; background: #FFA94D"></span><span style="height: 12px; border-radius: 2px; background: #FFA94D"></span><span style="height: 12px; border-radius: 2px; background: #263055"></span><span style="height: 12px; border-radius: 2px; background: #263055"></span><span style="height: 12px; border-radius: 2px; background: #263055"></span><span style="height: 12px; border-radius: 2px; background: #263055"></span>
+        </div>
+        <div style="font-size: 12px; color: #AEB8D6">quests give embers</div>
+      </div>
+      </sc-if>
+      <div style="padding: 14px 16px; border-radius: 20px; background: #141B33; display: flex; align-items: center; gap: 12px"><span style="font-family: 'Pixelify Sans', monospace; font-size: 32px">2</span><span style="font-size: 13px; color: #AEB8D6; font-weight: 700; line-height: 1.35">todos open<br><span style="color: #FF9E9E">1 overdue</span></span></div>
+      <div style="padding: 14px 16px; border-radius: 20px; background: #141B33; display: flex; align-items: center; gap: 12px"><span style="font-family: 'Pixelify Sans', monospace; font-size: 32px">0<span style="font-size: 18px; color: #AEB8D6">/4</span></span><span style="font-size: 13px; color: #AEB8D6; font-weight: 700; line-height: 1.35">focus<br>sessions</span></div>
+      <div style="padding: 14px 16px; border-radius: 20px; background: #141B33; display: flex; align-items: center; gap: 12px"><span style="font-family: 'Pixelify Sans', monospace; font-size: 32px">0<span style="font-size: 18px; color: #AEB8D6">/1</span></span><span style="font-size: 13px; color: #AEB8D6; font-weight: 700; line-height: 1.35">habits<br>done</span></div>
+      <div style="padding: 14px 16px; border-radius: 20px; background: #141B33; display: flex; align-items: center; gap: 14px">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#AEB8D6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17a4 4 0 1 1 .9-7.9A5 5 0 0 1 17.6 10 3.5 3.5 0 0 1 17 17zM9 20l-1 2M13 20l-1 2M17 20l-1 2"></path></svg>
+        <div style="font-size: 13px; font-weight: 800; line-height: 1.4">Rain ~16:00<br><span style="color: #AEB8D6; font-weight: 700">bring a jacket</span></div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 18px">
+      <!-- QUESTS -->
+      <section aria-label="Todos" style="flex: 3 1 380px; min-width: 0; padding: 22px; border-radius: 26px; background: #141B33; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <h2 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 21px">Today</h2>
+          <span style="font-family: 'Pixelify Sans', monospace; font-size: 14px; color: #AEB8D6">2 OPEN</span>
+        </div>
+        <!-- boss with claw marks -->
+        <label style="position: relative; overflow: hidden; display: flex; align-items: center; gap: 12px; padding: 16px 14px; border-radius: 18px; background: #2A1820; border: 2px solid #6A2C3C">
+          <svg aria-hidden="true" width="90" height="70" viewBox="0 0 90 70" style="position: absolute; right: 64px; top: -6px; opacity: 0.35"><path d="M20 4c10 18 14 38 12 62M42 0c10 20 12 42 8 68M64 6c8 16 10 34 6 56" fill="none" stroke="#FF8A8A" stroke-width="5" stroke-linecap="round"></path></svg>
+          <input type="checkbox" style="position: relative; width: 22px; height: 22px; margin: 0; accent-color: {{accent}}">
+          <span style="position: relative; font-family: 'Pixelify Sans', monospace; font-size: 13px; padding: 2px 7px; background: #FF8A8A; color: #3A0D12">OVERDUE</span>
+          <span style="position: relative; flex: 1; font-weight: 800; font-size: 16px">laporan robotik</span>
+          <span style="position: relative; font-size: 12px; color: #FF9E9E; font-weight: 800">2d late</span>
+          <sc-if value="{{showProgress}}" hint-placeholder-val="{{ false }}"><span style="position: relative; font-family: 'Pixelify Sans', monospace; font-size: 15px; color: #FFC27A">+50</span></sc-if>
+        </label>
+        <label style="display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; background: #1A2342">
+          <input type="checkbox" style="width: 22px; height: 22px; margin: 0; accent-color: {{accent}}">
+          <span style="font-family: 'Pixelify Sans', monospace; font-size: 13px; padding: 2px 7px; background: #2E3A66; color: #DCE3F7">PERSONAL</span>
+          <span style="flex: 1; font-weight: 700; font-size: 15px">beli makan</span>
+          <sc-if value="{{showProgress}}" hint-placeholder-val="{{ false }}"><span style="font-family: 'Pixelify Sans', monospace; font-size: 15px; color: #FFC27A">+10</span></sc-if>
+        </label>
+        <div style="display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border-radius: 18px; border: 2px dashed #3A4675">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <label for="f-add" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Add a todo</label>
+          <input id="f-add" placeholder="Add a todo… “besok jam 9”" style="flex: 1; min-width: 0; border: 0; background: transparent; color: #EEF2FF; outline: none; font-size: 15px; font-weight: 700">
+        </div>
+      </section>
+
+      <div style="flex: 2 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+        <!-- FLIGHT (focus) -->
+        <section aria-label="Focus" style="padding: 20px; border-radius: 26px; background: #141B33; display: flex; align-items: center; gap: 16px">
+          <div style="position: relative; width: 108px; height: 108px; flex: none">
+            <svg aria-hidden="true" width="36" height="28" viewBox="0 0 36 28" style="position: absolute; left: -16px; top: 30px"><path d="M34 14C24 14 14 8 2 2c4 8 6 14 4 22 8-6 16-8 28-10z" fill="#1A2242" stroke="#3A4675" stroke-width="2" stroke-linejoin="round"></path></svg>
+            <svg aria-hidden="true" width="36" height="28" viewBox="0 0 36 28" style="position: absolute; right: -16px; top: 30px; transform: scaleX(-1)"><path d="M34 14C24 14 14 8 2 2c4 8 6 14 4 22 8-6 16-8 28-10z" fill="#1A2242" stroke="#3A4675" stroke-width="2" stroke-linejoin="round"></path></svg>
+            <div style="position: relative; width: 108px; height: 108px; border-radius: 54px; background: #0A0E1C; border: 6px solid #263055; box-sizing: border-box; box-shadow: 0 0 30px rgba(62,240,160,0.16); display: flex; align-items: center; justify-content: center; font-family: 'Pixelify Sans', monospace; font-size: 26px">25:00</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; padding-left: 8px">
+            <h2 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 19px">Focus</h2>
+            <div style="font-size: 13px; color: #AEB8D6">0 of 4 sessions today</div>
+            <button style="align-self: flex-start; height: 38px; padding: 0 16px; border-radius: 19px; border: 0; background: #2E3A66; color: #EEF2FF; font-weight: 800">Start</button>
+          </div>
+        </section>
+
+        <!-- HATCHERY (habits) -->
+        <section aria-label="Habits" style="padding: 20px; border-radius: 26px; background: #141B33; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; align-items: center; gap: 14px">
+            <svg width="44" height="54" viewBox="0 0 44 54" role="img" aria-label="Dragon egg, 1 of 7 days toward hatching">
+              <path d="M22 2C11 2 3 20 3 33a19 19 0 0 0 38 0C41 20 33 2 22 2z" fill="#1A2242" stroke="{{accent}}" stroke-width="2.5"></path>
+              <path d="M8 30l6-4 5 5 6-6 5 5 6-4" fill="none" stroke="#3A4675" stroke-width="2" stroke-linejoin="round"></path>
+              <circle cx="16" cy="40" r="3" fill="#263055"></circle><circle cx="28" cy="16" r="2.5" fill="#263055"></circle>
+            </svg>
+            <div style="flex: 1">
+              <h2 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 19px">Habits</h2>
+              <div style="font-size: 13px; color: #AEB8D6">Streak 0 days · best 1</div>
+            </div>
+          </div>
+          <button aria-pressed="false" style="display: flex; align-items: center; gap: 12px; height: 50px; padding: 0 14px; border-radius: 16px; border: 2px solid #263055; background: #1A2342; color: #EEF2FF; font-weight: 700; font-size: 15px; text-align: left">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6CB8FF" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"></path></svg>
+            <span style="flex: 1">drink water</span><span style="font-size: 12px; color: #AEB8D6">best 1</span>
+          </button>
+          <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; text-align: center">
+            <span style="font-size: 11px; font-weight: 800; color: #AEB8D6">F</span><span style="font-size: 11px; font-weight: 800; color: #AEB8D6">S</span><span style="font-size: 11px; font-weight: 800; color: #AEB8D6">S</span><span style="font-size: 11px; font-weight: 800; color: #AEB8D6">M</span><span style="font-size: 11px; font-weight: 800; color: #AEB8D6">T</span><span style="font-size: 11px; font-weight: 800; color: #AEB8D6">W</span><span style="font-size: 11px; font-weight: 800; color: {{accent}}">T</span>
+            <svg width="100%" height="22" viewBox="0 0 22 22" aria-label="Friday: done"><g fill="{{accent}}"><ellipse cx="11" cy="15" rx="5" ry="4.5"></ellipse><ellipse cx="5" cy="8" rx="2" ry="3"></ellipse><ellipse cx="11" cy="5" rx="2" ry="3"></ellipse><ellipse cx="17" cy="8" rx="2" ry="3"></ellipse></g></svg>
+            <svg width="100%" height="22" viewBox="0 0 22 22" aria-label="Saturday: missed"><g fill="#263055"><ellipse cx="11" cy="15" rx="5" ry="4.5"></ellipse><ellipse cx="5" cy="8" rx="2" ry="3"></ellipse><ellipse cx="11" cy="5" rx="2" ry="3"></ellipse><ellipse cx="17" cy="8" rx="2" ry="3"></ellipse></g></svg>
+            <svg width="100%" height="22" viewBox="0 0 22 22" aria-label="Sunday: missed"><g fill="#263055"><ellipse cx="11" cy="15" rx="5" ry="4.5"></ellipse><ellipse cx="5" cy="8" rx="2" ry="3"></ellipse><ellipse cx="11" cy="5" rx="2" ry="3"></ellipse><ellipse cx="17" cy="8" rx="2" ry="3"></ellipse></g></svg>
+            <svg width="100%" height="22" viewBox="0 0 22 22" aria-label="Monday: missed"><g fill="#263055"><ellipse cx="11" cy="15" rx="5" ry="4.5"></ellipse><ellipse cx="5" cy="8" rx="2" ry="3"></ellipse><ellipse cx="11" cy="5" rx="2" ry="3"></ellipse><ellipse cx="17" cy="8" rx="2" ry="3"></ellipse></g></svg>
+            <svg width="100%" height="22" viewBox="0 0 22 22" aria-label="Tuesday: missed"><g fill="#263055"><ellipse cx="11" cy="15" rx="5" ry="4.5"></ellipse><ellipse cx="5" cy="8" rx="2" ry="3"></ellipse><ellipse cx="11" cy="5" rx="2" ry="3"></ellipse><ellipse cx="17" cy="8" rx="2" ry="3"></ellipse></g></svg>
+            <svg width="100%" height="22" viewBox="0 0 22 22" aria-label="Wednesday: missed"><g fill="#263055"><ellipse cx="11" cy="15" rx="5" ry="4.5"></ellipse><ellipse cx="5" cy="8" rx="2" ry="3"></ellipse><ellipse cx="11" cy="5" rx="2" ry="3"></ellipse><ellipse cx="17" cy="8" rx="2" ry="3"></ellipse></g></svg>
+            <svg width="100%" height="22" viewBox="0 0 22 22" aria-label="Thursday: not yet"><g fill="none" stroke="{{accent}}" stroke-width="1.5"><ellipse cx="11" cy="15" rx="5" ry="4.5"></ellipse><ellipse cx="5" cy="8" rx="2" ry="3"></ellipse><ellipse cx="11" cy="5" rx="2" ry="3"></ellipse><ellipse cx="17" cy="8" rx="2" ry="3"></ellipse></g></svg>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- FLIGHT PATH -->
+    <section aria-label="Next 7 days" style="padding: 22px; border-radius: 26px; background: #141B33; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <h2 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 21px">Next 7 days</h2>
+        <span style="font-family: 'Pixelify Sans', monospace; font-size: 14px; color: #AEB8D6">TODOS · NOTION</span>
+      </div>
+      <div style="position: relative">
+        <div aria-hidden="true" style="position: absolute; left: 6%; right: 6%; top: 16px; border-top: 3px dashed #3A4675"></div>
+        <div style="position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; text-align: center">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span style="font-family: 'Pixelify Sans', monospace; font-size: 11px; padding: 1px 6px; background: #FF8A8A; color: #3A0D12; border: 2px solid #141B33">OVERDUE</span><span style="font-size: 12px; font-weight: 800">Today</span><span style="font-size: 11px; color: #FF9E9E; font-weight: 700">laporan robotik</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span style="width: 30px; height: 30px; border-radius: 15px; background: #FFA94D; border: 4px solid #141B33; box-sizing: border-box"></span><span style="font-size: 12px; font-weight: 800">Fri</span><span style="font-size: 11px; color: #FFC27A; font-weight: 700">Grafkom T3</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; margin: 6px 0; border-radius: 9px; background: #263055"></span><span style="font-size: 12px; font-weight: 700; color: #AEB8D6">Sat</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; margin: 6px 0; border-radius: 9px; background: #263055"></span><span style="font-size: 12px; font-weight: 700; color: #AEB8D6">Sun</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span style="width: 30px; height: 30px; border-radius: 15px; background: {{accent}}; border: 4px solid #141B33; box-sizing: border-box"></span><span style="font-size: 12px; font-weight: 800">Mon</span><span style="font-size: 11px; color: #AEB8D6; font-weight: 700">Metpen draft</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; margin: 6px 0; border-radius: 9px; background: #263055"></span><span style="font-size: 12px; font-weight: 700; color: #AEB8D6">Tue</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; margin: 6px 0; border-radius: 9px; background: #263055"></span><span style="font-size: 12px; font-weight: 700; color: #AEB8D6">Wed</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#3EF0A0","options":["#3EF0A0","#6CB8FF","#C49BFF","#FFD25A"]},"animate":{"editor":"boolean","default":true},"showProgress":{"editor":"boolean","default":false},"$preview":{"width":1200,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#3EF0A0', animate: this.props.animate ?? true, showProgress: this.props.showProgress ?? false };
+  }
+}
+</script>
+</body>
+</html>

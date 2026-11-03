@@ -1,4 +1,5 @@
 import { getDb } from "./db";
+import { isRelevantAssignment, type AssignmentCandidate } from "./deadlines";
 import type { ChatMessage } from "./ollama";
 
 // ── TIME ──
@@ -151,9 +152,97 @@ export async function getReminders(): Promise<ReminderRow[]> {
   );
 }
 
+/** Pending reminders that fall on today's local date. */
+export async function getTodayReminders(): Promise<{ title: string; remind_at: string }[]> {
+  const db = await getDb();
+  return db.select(
+    `SELECT title, remind_at FROM reminders
+     WHERE status = 'pending' AND DATE(remind_at, 'localtime') = ?
+     ORDER BY remind_at ASC`,
+    [todayLocal()],
+  );
+}
+
 export async function deleteReminder(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM reminders WHERE id = ?", [id]);
+}
+
+// ── NOTION ASSIGNMENTS (synced read-only by notionSync.ts) ──
+export type AssignmentRow = {
+  notion_id: string;
+  name: string;
+  /** Local "YYYY-MM-DD" or "YYYY-MM-DD HH:MM". */
+  due_date: string;
+  course: string | null;
+  notion_status: string | null;
+};
+
+/**
+ * FROM/WHERE for open assignments in a current course (or none), for SQL-only
+ * counts. Mirrors `isCurrentCourse` in notionMapping.ts; keep the two in step.
+ */
+const CURRENT_ASSIGNMENTS = `
+  FROM notion_assignments a
+  LEFT JOIN notion_courses c ON c.notion_id = a.course_notion_id AND c.status != 'removed'
+  WHERE a.status = 'pending' AND a.due_date IS NOT NULL AND trim(a.name) != ''
+    AND (c.notion_id IS NULL OR c.notion_status IS NULL OR trim(c.notion_status) = ''
+         OR lower(trim(c.notion_status)) IN ('in progress', 'in-progress', 'in_progress', 'inprogress',
+                                             'sedang berjalan', 'berjalan', 'ongoing', 'current'))`;
+
+/**
+ * Open (not Done) assignments that matter now, soonest first, recent overdue
+ * included: named and dated, in a current course or none (see
+ * `isRelevantAssignment`). With `untilDays`, only those due within that many
+ * days from today. The course name comes from the courses table by page id.
+ */
+export async function getOpenAssignments(untilDays?: number, limit = 50): Promise<AssignmentRow[]> {
+  const db = await getDb();
+  const until = untilDays === undefined ? "" : "AND DATE(a.due_date) <= DATE(?, '+' || ? || ' days')";
+  const args: (string | number)[] = untilDays === undefined ? [] : [todayLocal(), untilDays];
+  type Row = AssignmentRow & Omit<AssignmentCandidate, "course_known"> & { course_known: number };
+  const rows = await db.select<Row[]>(
+    `SELECT a.notion_id, a.name, a.due_date, a.notion_status, a.course_notion_id,
+            COALESCE(c.name, a.course) AS course,
+            c.notion_id IS NOT NULL AS course_known, c.notion_status AS course_status
+     FROM notion_assignments a
+     LEFT JOIN notion_courses c ON c.notion_id = a.course_notion_id AND c.status != 'removed'
+     WHERE a.status = 'pending' AND a.due_date IS NOT NULL AND a.due_date != '' ${until}
+     ORDER BY a.due_date ASC`,
+    args,
+  );
+  const now = new Date();
+  return rows
+    .filter((r) => isRelevantAssignment({ ...r, course_known: !!r.course_known }, now))
+    .slice(0, limit)
+    .map(({ notion_id, name, due_date, course, notion_status }) => ({ notion_id, name, due_date, course, notion_status }));
+}
+
+export async function getAssignmentCounts(): Promise<{ assignments: number; courses: number }> {
+  const db = await getDb();
+  const [a, c] = await Promise.all([
+    db.select<{ n: number }[]>("SELECT COUNT(*) AS n FROM notion_assignments WHERE status != 'removed'"),
+    db.select<{ n: number }[]>("SELECT COUNT(*) AS n FROM notion_courses WHERE status != 'removed'"),
+  ]);
+  return { assignments: a[0]?.n ?? 0, courses: c[0]?.n ?? 0 };
+}
+
+/** (assignment, threshold) keys of nudges already sent, for these ids. */
+export async function getSentNudges(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const db = await getDb();
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+  const rows = await db.select<{ assignment_id: string; threshold: string }[]>(
+    `SELECT assignment_id, threshold FROM nudges_sent WHERE assignment_id IN (${placeholders})`,
+    ids,
+  );
+  return new Set(rows.map((r) => `${r.assignment_id}|${r.threshold}`));
+}
+
+/** Record a nudge before it goes out, so a crash or restart never repeats it. */
+export async function markNudgeSent(id: string, threshold: string): Promise<void> {
+  const db = await getDb();
+  await db.execute("INSERT OR IGNORE INTO nudges_sent (assignment_id, threshold) VALUES (?, ?)", [id, threshold]);
 }
 
 // ── CONVERSATION ──
@@ -453,10 +542,7 @@ export async function getTodayStats(): Promise<TodayStats> {
         "SELECT COUNT(*) as count FROM todos WHERE status != 'done' AND DATE(due_date) = ?",
         [today],
       ),
-      one(
-        "SELECT COUNT(*) as count FROM notion_assignments WHERE status != 'done' AND DATE(due_date) = ?",
-        [today],
-      ),
+      one(`SELECT COUNT(*) as count ${CURRENT_ASSIGNMENTS} AND DATE(a.due_date) = ?`, [today]),
     ]);
 
   return {
@@ -483,8 +569,8 @@ export async function getUpcoming(limit = 5): Promise<
     SELECT title, DATE(due_date) AS due_date, 'todo' AS source FROM todos
       WHERE status != 'done' AND due_date IS NOT NULL
     UNION ALL
-    SELECT name AS title, DATE(due_date) AS due_date, 'assignment' AS source
-      FROM notion_assignments WHERE status != 'done' AND due_date IS NOT NULL
+    SELECT a.name AS title, DATE(a.due_date) AS due_date, 'assignment' AS source
+      ${CURRENT_ASSIGNMENTS}
     UNION ALL
     SELECT title, DATE(remind_at, 'localtime') AS due_date, 'reminder' AS source
       FROM reminders WHERE status = 'pending'`;

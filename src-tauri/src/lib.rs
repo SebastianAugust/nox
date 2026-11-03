@@ -1,6 +1,11 @@
 mod db;
+mod http;
+mod notion;
 mod ollama;
 mod pet;
+mod secrets;
+mod telegram;
+mod weather;
 
 use std::sync::Mutex;
 use tauri::{
@@ -152,6 +157,18 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0002_appearance.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "connected nox",
+            sql: include_str!("../migrations/0003_connected.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 4,
+            description: "places, course status, briefing 07:30",
+            sql: include_str!("../migrations/0004_places.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -256,8 +273,91 @@ pub fn run() {
             show_dashboard,
             close_dashboard,
             ollama::ollama_chat,
-            ollama::ollama_cancel
+            ollama::ollama_cancel,
+            secrets::secret_set,
+            secrets::secret_exists,
+            secrets::secret_delete,
+            notion::notion_query_database,
+            weather::weather_geocode,
+            weather::weather_fetch,
+            weather::location_detect,
+            telegram::telegram_poll,
+            telegram::telegram_pairing_start,
+            telegram::telegram_send,
+            telegram::telegram_typing
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod migration_tests {
+    use sqlx::sqlite::SqlitePoolOptions;
+    use sqlx::SqlitePool;
+
+    async fn pool() -> SqlitePool {
+        // One connection: every in-memory connection is its own database.
+        SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap()
+    }
+
+    async fn run(pool: &SqlitePool, versions: std::ops::RangeInclusive<i64>) {
+        for m in super::migrations().into_iter().filter(|m| versions.contains(&m.version)) {
+            sqlx::raw_sql(m.sql).execute(pool).await.unwrap();
+        }
+    }
+
+    async fn setting(pool: &SqlitePool, key: &str) -> String {
+        sqlx::query_scalar("SELECT value FROM settings WHERE key = ?")
+            .bind(key)
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    #[test]
+    fn fresh_database_gets_0730_and_no_places() {
+        tauri::async_runtime::block_on(async {
+            let pool = pool().await;
+            run(&pool, 1..=4).await;
+            assert_eq!(setting(&pool, "briefing_time").await, "07:30");
+            assert_eq!(setting(&pool, "active_place_id").await, "");
+            assert_eq!(setting(&pool, "location_detect_enabled").await, "false");
+        });
+    }
+
+    #[test]
+    fn keeps_a_saved_time_and_moves_the_old_location_into_places() {
+        tauri::async_runtime::block_on(async {
+            let pool = pool().await;
+            run(&pool, 1..=3).await;
+            for (key, value) in [
+                ("briefing_time", "07:00"),
+                ("weather_location", "Jatinangor, Sumedang"),
+                ("weather_lat", "-6.93"),
+                ("weather_lon", "107.77"),
+                ("weather_place", "Jatinangor, West Java"),
+            ] {
+                // Saved by Bas later than the 0003 defaults.
+                sqlx::query("UPDATE settings SET value = ?, updated_at = '2999-01-01 00:00:00' WHERE key = ?")
+                    .bind(value)
+                    .bind(key)
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+            }
+            run(&pool, 4..=4).await;
+            assert_eq!(setting(&pool, "briefing_time").await, "07:00");
+            let (name, label, lat): (String, String, f64) =
+                sqlx::query_as("SELECT name, label, latitude FROM places")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!((name.as_str(), label.as_str(), lat), ("Jatinangor", "Jatinangor, West Java", -6.93));
+            assert_eq!(setting(&pool, "active_place_id").await, "1");
+        });
+    }
 }

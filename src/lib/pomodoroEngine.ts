@@ -26,7 +26,15 @@ export type PomSnapshot = {
   context: string;
 };
 
-export type PomCommand = { type: "start" | "stop" | "skip" };
+/**
+ * `start` may carry a one-off focus length (`/fokus 5`) and a context (the
+ * assignment a deadline nudge was about); both apply to that session only.
+ */
+export type PomCommand =
+  | { type: "start"; minutes?: number; context?: string }
+  | { type: "stop" | "skip" };
+
+const MAX_FOCUS_MIN = 180;
 
 const DEFAULT_FOCUS_MIN = 25;
 const DEFAULT_BREAK_MIN = 5;
@@ -136,9 +144,19 @@ async function handle(cmd: PomCommand) {
     if (snap.phase !== "idle") return;
     // Durations are read now, so a settings change applies to the next session.
     const durations = await readDurations();
+    const minutes = Math.round(Number(cmd.minutes));
+    if (minutes >= 1 && minutes <= MAX_FOCUS_MIN) durations.focusSec = minutes * 60;
+    const context = cmd.context?.trim().slice(0, 200) || "general";
     const now = Date.now();
     focusStartedAt = now;
-    publish({ ...snap, ...durations, phase: "focus", startedAt: now, endsAt: now + durations.focusSec * 1000 });
+    publish({
+      ...snap,
+      ...durations,
+      context,
+      phase: "focus",
+      startedAt: now,
+      endsAt: now + durations.focusSec * 1000,
+    });
   } else if (cmd.type === "stop") {
     if (snap.phase === "focus") await saveSession(Date.now(), false);
     if (snap.phase !== "idle") idle();

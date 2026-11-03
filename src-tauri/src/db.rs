@@ -20,9 +20,9 @@ async fn with_pool<T>(
     f(pool).await
 }
 
-/// One row of the `settings` table. Blocks; call it from setup or a thread.
-pub fn read_setting(app: &AppHandle, key: &str) -> Option<String> {
-    tauri::async_runtime::block_on(with_pool(app, async |pool| {
+/// One row of the `settings` table, from async code.
+pub async fn read_setting_async(app: &AppHandle, key: &str) -> Option<String> {
+    with_pool(app, async |pool| {
         sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = ?")
             .bind(key)
             .fetch_optional(pool)
@@ -30,7 +30,30 @@ pub fn read_setting(app: &AppHandle, key: &str) -> Option<String> {
             .map_err(|e| eprintln!("could not read setting {key}: {e}"))
             .ok()
             .flatten()
-    }))
+    })
+    .await
+}
+
+/// One row of the `settings` table. Blocks; call it from setup or a thread.
+pub fn read_setting(app: &AppHandle, key: &str) -> Option<String> {
+    tauri::async_runtime::block_on(read_setting_async(app, key))
+}
+
+/// Write a setting and wait for it, from async code.
+pub async fn write_setting_async(app: &AppHandle, key: &str, value: &str) -> bool {
+    with_pool(app, async |pool| {
+        sqlx::query(
+            "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(pool)
+        .await
+        .map_err(|e| eprintln!("could not save setting {key}: {e}"))
+        .ok()
+    })
+    .await
+    .is_some()
 }
 
 /// Write a setting in the background (never blocks the caller).

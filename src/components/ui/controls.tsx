@@ -36,7 +36,7 @@ export function Pill({
   );
 }
 
-export type TagTone = "overdue" | "personal" | "neutral" | "warn";
+export type TagTone = "overdue" | "personal" | "neutral" | "warn" | "done";
 
 /** Small uppercase pixel tag. */
 export function Tag({ tone = "neutral", children }: { tone?: TagTone; children: ReactNode }) {

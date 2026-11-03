@@ -3,8 +3,10 @@
 A small desktop pet assistant for Windows. Nox (a Toothless sprite) sits in the
 bottom-right corner of the screen, chats through a local Ollama model, and keeps
 quick todos, reminders, habits, pomodoros, mood check-ins and a daily recap.
-Everything runs and is stored locally; the only network call goes to Ollama on
-`localhost:11434`.
+It can also read assignments from Notion, show the weather (Open-Meteo), give a
+morning briefing, nudge before deadlines and talk to your phone over Telegram.
+Everything is stored locally; besides Ollama on `localhost:11434`, Nox only
+calls the services you set up (see Security notes).
 
 ## Architecture
 
@@ -93,23 +95,41 @@ themselves.
   timezone), todos, reminders, habits, mood check-ins, pomodoro sessions, day
   recaps and the chat history. It is plain, unencrypted SQLite readable by
   anything running as your Windows user. `/clear` deletes the chat history.
-- **Network:** only Rust talks to the network, and only to Ollama on
-  `localhost:11434`. The webviews have a strict CSP (`app.security.csp` in
+- **Network:** only Rust talks to the network: Ollama on `localhost:11434`,
+  and, once set up, `api.notion.com` (read-only), Open-Meteo (no account) and
+  `api.telegram.org`, plus `ipapi.co` only when you press "Detect now" (off
+  until switched on in Settings → Places). The webviews have a strict CSP (`app.security.csp` in
   `tauri.conf.json`): no remote scripts, styles, images or connections. Dev
   mode uses `devCsp`, which additionally allows Vite's inline module script
   and HMR socket on `ws://localhost:1420`.
 - **Permissions:** each window gets its own capability file in
   `src-tauri/capabilities/` (`pet.json`, `dashboard.json`) with only what it
   uses.
-- **Tokens (Phase 2):** API tokens (Notion etc.) will go to the Windows
-  Credential Manager, never into `nox.db` or a settings file.
+- **Tokens:** the Notion and Telegram tokens live in Windows Credential
+  Manager (entries under `com.lenovo.nox`), never in `nox.db`, a log or the
+  UI. Integrations only shows "Saved" / "Not set".
+- **Telegram:** only the chat you paired with a one-time code gets answers;
+  everyone else is ignored. Commands are the fixed list below; none can run
+  programs or read files.
 
-## Slash commands (pet chat)
+## Slash commands (pet chat and Telegram)
+
+Anything starting with `/` is a command and never goes to the model.
+Indonesian names first; English aliases work too, in any case.
 
 | Command | Does |
 |---|---|
-| `/todo <task> [today \| tomorrow \| 25/12]` | Quick-capture a todo (also accepts `hari ini`, `besok`) |
-| `/remind <thing> at 09:00` | Reminder at a time (also `jam 09:00`, `besok jam 09:00`) |
-| `/clear` | Forget the chat history (it is kept across restarts otherwise) |
-| `/dashboard` | Open the dashboard |
-| `/help` | List the commands |
+| `/tugas` (`/tasks`) | Upcoming Notion assignments, numbered |
+| `/tugas <n>` | Details of assignment n |
+| `/todo <task> [today \| tomorrow \| 25/12]` | Quick-capture a todo (also `hari ini`, `besok`) |
+| `/todo list` | Open todos, numbered |
+| `/done <n>` | Tick off todo n from `/todo list` |
+| `/ingat <time> <thing>` (`/remind`) | Reminder: `10m`, `2h`, `18:30`, `besok 08:00` (the old `/remind <thing> at 09:00` still works) |
+| `/fokus [minutes]` (`/focus`) | Start a focus session |
+| `/stop` | Stop the focus session |
+| `/status` | Focus, open todos, next deadline |
+| `/cuaca` (`/weather`) | Weather now at the active place |
+| `/lokasi [name]` (`/location`) | Show the active place, or switch to a saved one. Over Telegram, sending a location pin saves a new place |
+| `/bantu` (`/help`) | List the commands |
+| `/clear` | Pet only: forget the chat history |
+| `/dashboard` | Pet only: open the dashboard |

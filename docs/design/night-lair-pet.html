@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nox pet — Night Lair</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@600;700&amp;family=Nunito:wght@700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;cursor:pointer}
+input{font:inherit}
+@keyframes nox-twinkle{0%,100%{opacity:.25}50%{opacity:1}}
+@keyframes nox-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes nox-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<div style="width: 440px; height: 600px; position: relative; overflow: hidden; background: #2A2F3A; font-family: Nunito, system-ui, sans-serif">
+  <div aria-hidden="true" style="position: absolute; left: 24px; top: 28px; width: 300px; height: 380px; border-radius: 10px; background: #F4F5F7; display: flex; flex-direction: column; gap: 10px; padding: 18px; box-sizing: border-box">
+    <span style="width: 60%; height: 10px; border-radius: 5px; background: #D5D8DE"></span>
+    <span style="width: 90%; height: 8px; border-radius: 4px; background: #E3E5EA"></span>
+    <span style="width: 80%; height: 8px; border-radius: 4px; background: #E3E5EA"></span>
+  </div>
+  <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: #161921"></div>
+
+  <div style="position: absolute; right: 18px; bottom: 54px; width: 310px; display: flex; flex-direction: column; align-items: flex-end; gap: 12px">
+    <!-- reward toast -->
+    <sc-if value="{{showProgress}}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 15px; background: #2B2414; color: #FFC27A; font-weight: 800; font-size: 13px; box-shadow: 0 6px 18px rgba(0,0,0,0.3)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="#FFA94D" aria-hidden="true"><path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-7 0 2 1 3 3 3-1-3 0-6 0-8z"></path></svg>
+      +10 embers · beli makan
+    </div>
+    </sc-if>
+    <!-- RPG dialog, softened -->
+    <div role="status" style="position: relative; width: 100%; box-sizing: border-box; margin-top: 8px; padding: 18px 14px 12px; background: #070A14; color: #EEF2FF; border: 3px solid #EEF2FF; box-shadow: inset 0 0 0 3px #070A14, inset 0 0 0 5px #2E3A66, 5px 5px 0 rgba(0,0,0,0.45)">
+      <span style="position: absolute; left: 10px; top: -16px; padding: 1px 8px; background: {{accent}}; color: #06261A; font-family: 'Pixelify Sans', monospace; font-size: 14px; font-weight: 700; border: 3px solid #05070F">NOX</span>
+      <p style="margin: 0 0 12px; font-size: 14px; line-height: 1.5; font-weight: 800"><span style="color: #FF8A8A">laporan robotik</span> is 2 days overdue. Focus on it for 25 minutes?</p>
+      <div style="display: flex; gap: 6px">
+        <button style="height: 38px; padding: 0 14px; border-radius: 19px; border: 0; background: {{accent}}; color: #06261A; font-weight: 800; font-size: 14px; box-shadow: 0 4px 0 #1C8A5B">Start focus</button>
+        <button style="height: 38px; padding: 0 12px; border-radius: 19px; border: 2px solid #3A4675; background: transparent; color: #EEF2FF; font-weight: 700; font-size: 14px">Later</button>
+      </div>
+      <span aria-hidden="true" style="position: absolute; right: 10px; bottom: 6px; font-size: 10px; color: {{accent}}">&#9660;</span>
+    </div>
+    <!-- chat -->
+    <div style="width: 100%; display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 5px 0 18px; box-sizing: border-box; border-radius: 23px; background: #0E1530; border: 2px solid {{accent}}">
+      <label for="f-chat" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Message Nox</label>
+      <input id="f-chat" placeholder="Talk to Nox…" style="flex: 1; min-width: 0; border: 0; background: transparent; color: #EEF2FF; outline: none; font-size: 14px; font-weight: 700">
+      <button aria-label="Send" style="width: 36px; height: 36px; border-radius: 18px; border: 0; background: {{accent}}; color: #06261A; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>
+    </div>
+    <!-- sprite + mini HUD -->
+    <div style="display: flex; align-items: flex-end; gap: 10px">
+      <sc-if value="{{showProgress}}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; border-radius: 12px; background: #0E1530; border: 1px solid #263055; font-family: 'Pixelify Sans', monospace; font-size: 12px; color: #AEB8D6">
+        <div style="display: flex; align-items: center; gap: 6px">EN <span role="img" aria-label="Energy 4 of 6" style="display: inline-flex; gap: 2px"><span style="width: 6px; height: 9px; background: {{accent}}"></span><span style="width: 6px; height: 9px; background: {{accent}}"></span><span style="width: 6px; height: 9px; background: {{accent}}"></span><span style="width: 6px; height: 9px; background: {{accent}}"></span><span style="width: 6px; height: 9px; background: #263055"></span><span style="width: 6px; height: 9px; background: #263055"></span></span></div>
+        <div style="color: #FFD25A">LV 3</div>
+      </div>
+      </sc-if>
+      <div style="position: relative; width: 112px; height: 112px">
+        <span aria-hidden="true" style="position: absolute; left: -12px; top: 4px; width: 4px; height: 4px; background: #F6EBC8; animation: nox-twinkle 3s ease-in-out infinite"></span>
+        <span aria-hidden="true" style="position: absolute; right: -8px; top: 24px; width: 3px; height: 3px; background: {{accent}}; animation: nox-twinkle 3.8s ease-in-out infinite 1.3s"></span>
+        <div style="width: 112px; height: 112px; border-radius: 36px; background: #0E1530; border: 2px dashed #3A4675; box-sizing: border-box; box-shadow: 0 0 34px rgba(62,240,160,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; animation: nox-bob 4s ease-in-out infinite">
+          <div aria-hidden="true" style="display: flex; gap: 14px">
+            <span style="width: 13px; height: 18px; border-radius: 50%; background: {{accent}}; box-shadow: 0 0 10px {{accent}}; display: flex; justify-content: center; align-items: center; animation: nox-blink 5s infinite"><span style="width: 2px; height: 13px; border-radius: 1px; background: #05070F"></span></span>
+            <span style="width: 13px; height: 18px; border-radius: 50%; background: {{accent}}; box-shadow: 0 0 10px {{accent}}; display: flex; justify-content: center; align-items: center; animation: nox-blink 5s infinite"><span style="width: 2px; height: 13px; border-radius: 1px; background: #05070F"></span></span>
+          </div>
+          <span style="font-size: 10px; color: #AEB8D6; font-weight: 800">your sprite</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#3EF0A0","options":["#3EF0A0","#6CB8FF","#C49BFF","#FFD25A"]},"showProgress":{"editor":"boolean","default":false},"$preview":{"width":440,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#3EF0A0', showProgress: this.props.showProgress ?? false };
+  }
+}
+</script>
+</body>
+</html>

@@ -500,6 +500,12 @@ button:disabled {
   color: var(--danger-ink);
 }
 
+/* Mint means done: saved, connected, paired. */
+.tag--done {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 /* ── Cards and stats ──────────────────────────────────────────────────── */
 
 .card {
