@@ -16,6 +16,14 @@ const ALLOWED: [&str; 2] = [NOTION_TOKEN, TELEGRAM_TOKEN];
 
 const MAX_LEN: usize = 512;
 
+/// Google OAuth: the client id and secret Bas pasted, and the refresh token.
+/// Only `google.rs` reads or writes these; the secret_* commands cannot, and
+/// no command returns them.
+pub const GOOGLE_CLIENT_ID: &str = "google_client_id";
+pub const GOOGLE_CLIENT_SECRET: &str = "google_client_secret";
+pub const GOOGLE_REFRESH_TOKEN: &str = "google_refresh_token";
+const GOOGLE: [&str; 3] = [GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN];
+
 /// Calendar feed URLs (`calendar_feed_<id>`) are secrets too, but only the
 /// calendar module touches them; the secret_* commands cannot.
 fn is_calendar(name: &str) -> bool {
@@ -24,7 +32,7 @@ fn is_calendar(name: &str) -> bool {
 }
 
 fn entry(name: &str) -> Result<Entry, String> {
-    if !ALLOWED.contains(&name) && !is_calendar(name) {
+    if !ALLOWED.contains(&name) && !is_calendar(name) && !GOOGLE.contains(&name) {
         return Err("unknown secret".into());
     }
     Entry::new(SERVICE, name).map_err(|_| "credential store unavailable".into())
@@ -38,7 +46,7 @@ fn token_entry(name: &str) -> Result<Entry, String> {
     entry(name)
 }
 
-/// Store a secret from Rust (calendar feed URLs).
+/// Store a secret from Rust (calendar feed URLs, Google OAuth).
 pub fn store(name: &str, value: &str) -> Result<(), String> {
     entry(name)?.set_password(value).map_err(|_| "could not save to Credential Manager".into())
 }

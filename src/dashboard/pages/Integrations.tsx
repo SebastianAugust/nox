@@ -14,6 +14,17 @@ import { SettingRow, TextSetting } from "../widgets/SettingControls";
 import { SecretField } from "../widgets/SecretField";
 import { flushOutbox, outboxStatus, retryOutbox, type OutboxRow } from "../../lib/notionOutbox";
 import { addFeed, getFeeds, MAX_FEEDS, removeFeed, setFeedEnabled, type CalendarFeed } from "../../lib/calendar";
+import {
+  connectGoogle,
+  disconnectGoogle,
+  getSources,
+  googleStatus,
+  removeGoogleClient,
+  saveGoogleClient,
+  setSourceEnabled,
+  type CalendarSource,
+  type GoogleStatus,
+} from "../../lib/googleCalendar";
 
 const PAIR_MINUTES = 10;
 
@@ -427,6 +438,7 @@ export default function PageIntegrations() {
         <BriefingCard />
         <TelegramCard />
         <WeatherCard />
+        <GoogleCalendarCard />
         <CalendarsCard />
       </div>
       <div className="service-grid">
@@ -445,7 +457,7 @@ export default function PageIntegrations() {
 }
 
 /**
- * The opt-in for Notion writes (Done checkbox and new assignments only) and
+ * The opt-in for Notion writes (Done checkbox, title and date, new assignments) and
  * what the outbox holds: pending writes, and failed ones with Retry.
  */
 function NotionWrites({ configured }: { configured: boolean }) {
@@ -479,7 +491,7 @@ function NotionWrites({ configured }: { configured: boolean }) {
             {status.pending > 0 && <span>{t(on ? "int.notion.outboxPending" : "int.notion.outboxHeld", { n: status.pending })}</span>}
             {status.failed.map((f) => (
               <p key={f.id} className="field-error" role="alert">
-                {t(f.op === "create" ? "int.notion.failedCreate" : "int.notion.failedDone", { title: f.title })}{" "}
+                {t(f.op === "create" ? "int.notion.failedCreate" : f.op === "update" ? "int.notion.failedUpdate" : "int.notion.failedDone", { title: f.title })}{" "}
                 {f.last_error ? apiErrorText(JSON.parse(f.last_error), "notion") : ""}{" "}
                 <button type="button" className="link-btn" onClick={() => void retryOutbox(f.id).then(() => flushOutbox())}>
                   {t("int.notion.retry")}
@@ -493,10 +505,223 @@ function NotionWrites({ configured }: { configured: boolean }) {
   );
 }
 
+// ── Google Calendar (OAuth; read + create events) ──
+
+function GoogleCalendarCard() {
+  const { values, save } = useSettingValues(["calendar_nudge_minutes", "google_can_create"]);
+  const [status, setStatus] = useState<GoogleStatus | null>(null);
+  const [sources, setSources] = useState<CalendarSource[]>([]);
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [busy, setBusy] = useState<"client" | "connect" | "disconnect" | null>(null);
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+
+  const load = useCallback(() => {
+    googleStatus().then(setStatus).catch(() => setStatus({ hasClient: false, connected: false }));
+    getSources().then(setSources).catch(console.error);
+  }, []);
+  useEffect(() => {
+    load();
+    const unlisten = listen("calendar:status", load);
+    return () => {
+      unlisten.then((off) => off()).catch(console.error);
+    };
+  }, [load]);
+
+  if (!values || !status) return null;
+  const failing = sources.some((s) => s.enabled && s.last_error);
+  const tag = !status.connected
+    ? { tone: "neutral" as const, label: "int.notConnected" as const }
+    : failing
+      ? { tone: "warn" as const, label: "int.attention" as const }
+      : { tone: "done" as const, label: "int.connected" as const };
+
+  const saveClient = async () => {
+    setBusy("client");
+    setMessage(null);
+    try {
+      await saveGoogleClient(clientId, clientSecret);
+      // Write-only: the fields empty and never show the values again.
+      setClientId("");
+      setClientSecret("");
+      setMessage({ text: t("g.clientSaved"), error: false });
+    } catch {
+      setMessage({ text: t("g.badClient"), error: true });
+    }
+    setBusy(null);
+    load();
+  };
+
+  const connect = async () => {
+    setBusy("connect");
+    setMessage(null);
+    try {
+      const r = await connectGoogle();
+      await save("google_can_create", String(r.canCreate));
+      setMessage({ text: t(r.canCreate ? "g.connected" : "g.cantCreate"), error: !r.canCreate });
+    } catch (err) {
+      setMessage({ text: t("g.connectFailed", { reason: apiErrorText(err, "google") }), error: true });
+    }
+    setBusy(null);
+    load();
+  };
+
+  const disconnect = async () => {
+    setBusy("disconnect");
+    setMessage(null);
+    try {
+      const r = await disconnectGoogle();
+      setMessage({ text: t(r.revoked ? "g.disconnected" : "g.disconnectedOffline"), error: false });
+    } catch (err) {
+      setMessage({ text: apiErrorText(err, "google"), error: true });
+    }
+    setBusy(null);
+    load();
+  };
+
+  return (
+    <ServiceCard icon="ti-calendar" name={t("g.title")} status={tag} about="g.about">
+      {!status.connected && (
+        <>
+          <p className="muted">{t("g.setupHint")}</p>
+          <form
+            className="feed-add"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void saveClient();
+            }}
+          >
+            <label htmlFor="g-client-id" className="sr-only">
+              {t("g.clientId")}
+            </label>
+            <input
+              id="g-client-id"
+              className="field"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={status.hasClient ? `${t("g.clientId")} · ${t("g.clientSaved")}` : t("g.clientId")}
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+            />
+            <label htmlFor="g-client-secret" className="sr-only">
+              {t("g.clientSecret")}
+            </label>
+            <input
+              id="g-client-secret"
+              type="password"
+              className="field"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={t("g.clientSecret")}
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+            />
+            <ChunkyButton type="submit" size="sm" variant="secondary" disabled={busy !== null || !clientId.trim() || !clientSecret.trim()}>
+              {t("g.saveClient")}
+            </ChunkyButton>
+          </form>
+          <p className="muted">{t("g.clientHint")}</p>
+        </>
+      )}
+
+      <div className="sync-row">
+        <span className="muted">{busy === "connect" ? t("g.connecting") : status.connected ? t("g.connected") : t("g.connectHint")}</span>
+        {status.connected ? (
+          <ChunkyButton size="sm" variant="secondary" disabled={busy !== null} onClick={() => void disconnect()}>
+            {t("g.disconnect")}
+          </ChunkyButton>
+        ) : (
+          <span className="lists__confirm">
+            {status.hasClient && (
+              <ChunkyButton size="sm" variant="quiet" disabled={busy !== null} onClick={() => void removeGoogleClient().then(load)}>
+                {t("g.removeClient")}
+              </ChunkyButton>
+            )}
+            <ChunkyButton size="sm" disabled={busy !== null || !status.hasClient} onClick={() => void connect()}>
+              {t("g.connect")}
+            </ChunkyButton>
+          </span>
+        )}
+      </div>
+      {status.connected && values.google_can_create === "false" && <p className="field-error">{t("g.cantCreate")}</p>}
+      {message && (
+        <p className={message.error ? "field-error" : "muted"} role={message.error ? "alert" : "status"}>
+          {message.text}
+        </p>
+      )}
+
+      {status.connected && (
+        <SettingRow label={t("g.calendars")} hint={t("g.calendarsHint")}>
+          <span />
+        </SettingRow>
+      )}
+      {status.connected &&
+        (sources.length === 0 ? (
+          <p className="muted">{t("g.noCalendars")}</p>
+        ) : (
+          <ul className="lists">
+            {sources.map((s) => (
+              <li key={s.calendar_id} className="feed">
+                <div className="feed__text">
+                  <span className="feed__name">
+                    {s.color && <span className="g-dot" style={{ background: s.color }} aria-hidden="true" />}
+                    {s.name}
+                    {s.is_primary ? <span className="muted"> · {t("g.primary")}</span> : null}
+                  </span>
+                  {s.enabled ? (
+                    <span className="muted">
+                      {s.last_synced_at
+                        ? t("g.lastSync", { time: localTime(s.last_synced_at), n: s.events })
+                        : t("int.notion.never")}
+                    </span>
+                  ) : null}
+                  {s.enabled && s.last_error ? (
+                    <span className="field-error">
+                      {t("g.failed")} {apiErrorText(JSON.parse(s.last_error), "google")}
+                    </span>
+                  ) : null}
+                </div>
+                <Toggle
+                  label={t("g.calendarOn", { name: s.name })}
+                  on={!!s.enabled}
+                  onChange={(on) => void setSourceEnabled(s.calendar_id, on).then(load)}
+                />
+              </li>
+            ))}
+          </ul>
+        ))}
+
+      <SettingRow label={t("cal.nudge")} hint={t("cal.nudgeHint")} htmlFor="cal-nudge">
+        <select
+          id="cal-nudge"
+          className="field field--select field--short"
+          value={values.calendar_nudge_minutes ?? "60"}
+          onChange={(e) => void save("calendar_nudge_minutes", e.target.value)}
+        >
+          {/* A value set elsewhere may not be in the list. */}
+          {["0", "5", "10", "15", "30", "60", "120"].includes(values.calendar_nudge_minutes ?? "60") ? null : (
+            <option value={values.calendar_nudge_minutes}>{t("set.minutes", { n: values.calendar_nudge_minutes ?? "" })}</option>
+          )}
+          {["0", "5", "10", "15", "30", "60", "120"].map((m) => (
+            <option key={m} value={m}>
+              {m === "0" ? t("cal.nudgeOff") : t("set.minutes", { n: m })}
+            </option>
+          ))}
+        </select>
+      </SettingRow>
+      <div className="sync-row">
+        <span className="muted">{t("cal.window")}</span>
+        <ChunkyButton size="sm" disabled={!status.connected} onClick={() => emit("calendar:sync").catch(console.error)}>
+          {t("int.notion.sync")}
+        </ChunkyButton>
+      </div>
+    </ServiceCard>
+  );
+}
+
 // ── Calendars (ICS feeds, read-only) ──
 
 function CalendarsCard() {
-  const { values, save } = useSettingValues(["calendar_nudge_minutes"]);
   const [feeds, setFeeds] = useState<CalendarFeed[]>([]);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -525,7 +750,6 @@ function CalendarsCard() {
     } else setError(t(r === "full" ? "cal.full" : "cal.badUrl", { n: MAX_FEEDS }));
   };
 
-  if (!values) return null;
   const any = feeds.some((f) => f.enabled);
   const failing = feeds.some((f) => f.enabled && f.last_error);
   const status = failing
@@ -605,20 +829,6 @@ function CalendarsCard() {
           {error}
         </p>
       )}
-      <SettingRow label={t("cal.nudge")} hint={t("cal.nudgeHint")} htmlFor="cal-nudge">
-        <select
-          id="cal-nudge"
-          className="field field--select field--short"
-          value={values.calendar_nudge_minutes ?? "15"}
-          onChange={(e) => void save("calendar_nudge_minutes", e.target.value)}
-        >
-          {["0", "5", "10", "15", "30", "60"].map((m) => (
-            <option key={m} value={m}>
-              {m === "0" ? t("cal.nudgeOff") : t("set.minutes", { n: m })}
-            </option>
-          ))}
-        </select>
-      </SettingRow>
       <div className="sync-row">
         <span className="muted">{t("cal.window")}</span>
         <ChunkyButton size="sm" disabled={!any} onClick={() => emit("calendar:sync").catch(console.error)}>

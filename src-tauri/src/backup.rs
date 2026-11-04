@@ -69,8 +69,56 @@ pub fn default_folder() -> PathBuf {
         .join("NoxBackups")
 }
 
-/// A usable backup folder: absolute, sane, and not Nox's own data folder.
-/// Does not create it.
+/// A folder Nox offers in Settings (never picked silently).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderSuggestion {
+    /// "googleDrive", "oneDrive" or "documents".
+    pub kind: &'static str,
+    pub path: String,
+}
+
+/// Google Drive for desktop and OneDrive folders, each as
+/// `<found>\NoxBackups`, then the Documents fallback (always last).
+/// `env` and `is_dir` are passed in so this can be tested without the real
+/// machine.
+pub fn detect_folders(env: impl Fn(&str) -> Option<String>, is_dir: impl Fn(&Path) -> bool) -> Vec<FolderSuggestion> {
+    let mut found: Vec<FolderSuggestion> = Vec::new();
+    let mut add = |kind: &'static str, base: PathBuf| {
+        if !is_dir(&base) {
+            return;
+        }
+        let path = base.join("NoxBackups").to_string_lossy().to_string();
+        if !found.iter().any(|f| f.path.eq_ignore_ascii_case(&path)) {
+            found.push(FolderSuggestion { kind, path });
+        }
+    };
+    // Drive for desktop (streaming) mounts a drive letter, usually G:, with
+    // "My Drive" (Indonesian UI: "Drive Saya") at its root.
+    for letter in 'C'..='Z' {
+        for name in ["My Drive", "Drive Saya"] {
+            add("googleDrive", PathBuf::from(format!("{letter}:\\{name}")));
+        }
+    }
+    if let Some(home) = env("USERPROFILE") {
+        let home = PathBuf::from(home);
+        // Mirror mode, and the older Backup and Sync folder.
+        for name in ["My Drive", "Drive Saya", "Google Drive"] {
+            add("googleDrive", home.join(name));
+        }
+        for var in ["OneDrive", "OneDriveConsumer", "OneDriveCommercial"] {
+            if let Some(dir) = env(var).filter(|d| !d.trim().is_empty()) {
+                add("oneDrive", PathBuf::from(dir));
+            }
+        }
+        add("oneDrive", home.join("OneDrive"));
+    }
+    found.push(FolderSuggestion { kind: "documents", path: default_folder().to_string_lossy().to_string() });
+    found
+}
+
+/// A usable backup folder: absolute, sane, on a drive that exists, and not
+/// Nox's own data folder. Does not create it.
 pub fn validate_folder(raw: &str, app_dir: Option<&Path>) -> Result<PathBuf, BackupError> {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -81,6 +129,11 @@ pub fn validate_folder(raw: &str, app_dir: Option<&Path>) -> Result<PathBuf, Bac
     }
     let path = PathBuf::from(raw);
     if !path.is_absolute() {
+        return Err(BackupError::FolderInvalid);
+    }
+    // `X:\...` on a drive that is not there (an unplugged disk, Drive for
+    // desktop not running) cannot be created.
+    if !path.ancestors().last().is_some_and(|root| root.exists()) {
         return Err(BackupError::FolderInvalid);
     }
     if path.exists() && !path.is_dir() {
@@ -346,6 +399,13 @@ pub fn backup_default_folder() -> String {
     default_folder().to_string_lossy().to_string()
 }
 
+/// Folders to offer: Google Drive, OneDrive, then Documents. Async so a slow
+/// drive letter never stalls the window.
+#[tauri::command]
+pub async fn backup_detect_folders() -> Vec<FolderSuggestion> {
+    detect_folders(|k| std::env::var(k).ok(), |p| p.is_dir())
+}
+
 /// Open the backup folder in Explorer (creating it if needed).
 #[tauri::command]
 pub fn backup_open_folder(folder: String) -> Result<(), BackupError> {
@@ -393,7 +453,7 @@ mod tests {
             touch(&dir, &format!("nox-202611{d:02}-0900.db"));
         }
         // Things that must never be deleted.
-        for other in ["nox.db", "notes.txt", "nox-old.db", "my-nox-20260101-0000.db", "nox-20261101-0900.db.bak", "NOX-20261101-0900.db"] {
+        for other in ["nox.db", "notes.txt", "nox-old.db", "my-nox-20260101-0000.db", "nox-20261101-0900.db.bak", "NOX-20250101-0900.db"] {
             touch(&dir, other);
         }
         std::fs::create_dir(dir.join("nox-20260101-0000.db")).unwrap(); // a folder with the name
@@ -403,7 +463,7 @@ mod tests {
         assert!(!left.contains(&"nox-20261102-0900.db".to_string()));
         assert!(left.contains(&"nox-20261103-0900.db".to_string()));
         assert!(left.contains(&"nox-20261116-0900.db".to_string()));
-        for other in ["nox.db", "notes.txt", "nox-old.db", "my-nox-20260101-0000.db", "nox-20261101-0900.db.bak", "NOX-20261101-0900.db", "nox-20260101-0000.db"] {
+        for other in ["nox.db", "notes.txt", "nox-old.db", "my-nox-20260101-0000.db", "nox-20261101-0900.db.bak", "NOX-20250101-0900.db", "nox-20260101-0000.db"] {
             assert!(left.contains(&other.to_string()), "{other} must survive");
         }
         let _ = std::fs::remove_dir_all(&dir);
@@ -430,6 +490,31 @@ mod tests {
         touch(&dir, "a-file");
         assert_eq!(validate_folder(&dir.join("a-file").to_string_lossy(), None), Err(BackupError::FolderInvalid));
         let _ = std::fs::remove_dir_all(&dir);
+        // A drive letter that is not mounted on this machine.
+        if let Some(missing) = ('D'..='Z').find(|l| !Path::new(&format!("{l}:\\")).exists()) {
+            assert_eq!(validate_folder(&format!("{missing}:\\NoxBackups"), None), Err(BackupError::FolderInvalid));
+        }
+    }
+
+    #[test]
+    fn offers_drive_and_onedrive_folders_then_documents() {
+        let dirs = [r"G:\My Drive", r"C:\Users\bas\OneDrive"];
+        let env = |k: &str| match k {
+            "USERPROFILE" => Some(r"C:\Users\bas".to_string()),
+            "OneDrive" => Some(r"C:\Users\bas\OneDrive".to_string()),
+            _ => None,
+        };
+        let found = detect_folders(env, |p| dirs.iter().any(|d| Path::new(d) == p));
+        let got: Vec<(&str, &str)> = found.iter().map(|f| (f.kind, f.path.as_str())).collect();
+        assert_eq!(got[0], ("googleDrive", r"G:\My Drive\NoxBackups"));
+        // OneDrive from the env var and the profile folder is offered once.
+        assert_eq!(got[1], ("oneDrive", r"C:\Users\bas\OneDrive\NoxBackups"));
+        assert_eq!(got.len(), 3);
+        assert_eq!(got[2].0, "documents");
+        // Nothing found: only the Documents fallback.
+        let none = detect_folders(|_| None, |_| false);
+        assert_eq!(none.len(), 1);
+        assert_eq!(none[0].kind, "documents");
     }
 
     async fn make_db(path: &Path, applied: &[i64], folder: Option<&Path>) {

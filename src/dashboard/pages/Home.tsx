@@ -21,6 +21,7 @@ import { getWeather, weatherKind, type WeatherState } from "../../lib/weather";
 import { listen } from "@tauri-apps/api/event";
 import { PlaceSelect } from "../widgets/Places";
 import TodaySchedule from "../widgets/TodaySchedule";
+import BackupNotice from "../widgets/BackupNotice";
 import type { Appearance } from "../../lib/theme";
 import { pickSuggestion, type Suggestion } from "../../lib/homeMessage";
 import { habitStreak, shiftDay, type HabitLogMap } from "../../lib/streaks";
@@ -198,6 +199,8 @@ export default function PageHome({ appearance }: { appearance: Appearance }) {
           <StatCard value={pom.sessionsToday} of={DAILY_FOCUS_GOAL} label={t("home.focusSessions")} />
           <StatCard value={data.stats.habitsDone} of={data.stats.habitsTotal} label={t("home.habitsDone")} />
         </div>
+
+        <BackupNotice offer />
 
         <TodaySchedule />
 

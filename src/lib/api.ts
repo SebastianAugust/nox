@@ -18,7 +18,9 @@ export type ApiErrorKind =
   | "invalid"
   | "notPaired"
   | "writesOff"
-  | "readOnly";
+  | "readOnly"
+  // Outbox only: a title or date was also changed in Notion; Notion's value was kept.
+  | "conflict";
 
 export type ApiError = { kind: ApiErrorKind; status?: number };
 
@@ -29,16 +31,16 @@ export function asApiError(err: unknown): ApiError {
   return { kind: "badResponse" };
 }
 
-export type Service = "notion" | "weather" | "telegram";
+export type Service = "notion" | "weather" | "telegram" | "google";
 
 /** A short, user-facing sentence for an API error. */
 export function apiErrorText(err: unknown, service: Service): string {
   const e = asApiError(err);
   switch (e.kind) {
     case "noToken":
-      return t("api.noToken");
+      return t(service === "google" ? "api.unauthorizedGoogle" : "api.noToken");
     case "unauthorized":
-      return t(service === "notion" ? "api.unauthorizedNotion" : "api.tokenInvalid");
+      return t(service === "notion" ? "api.unauthorizedNotion" : service === "google" ? "api.unauthorizedGoogle" : "api.tokenInvalid");
     case "notFound":
       return t(service === "notion" ? "api.notFoundNotion" : "api.notFound");
     case "rateLimited":
@@ -57,6 +59,8 @@ export function apiErrorText(err: unknown, service: Service): string {
       return t("api.writesOff");
     case "readOnly":
       return t("api.readOnly");
+    case "conflict":
+      return t("api.conflict");
     default:
       return t("api.badResponse");
   }

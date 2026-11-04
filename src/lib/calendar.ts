@@ -3,9 +3,11 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { asApiError } from "./api";
 import { dayBoundsUtc, dueEventNudges, nudgeKey, type CalendarEvent } from "./calendarLogic";
 import { isTestDb, sqlDb } from "./todoRepo";
+import { syncGoogle } from "./googleCalendar";
 
 /**
- * Calendar feeds (ICS), read-only. The URL goes straight to Credential
+ * Calendars: Google Calendar (googleCalendar.ts) and ICS feeds, read here
+ * side by side. The ICS URL goes straight to Credential
  * Manager through Rust (`calendar_feed_set`); only an id and a name are kept
  * here. The pet window syncs on start, every 30 minutes and on "Sync now"
  * ("calendar:sync"); a failed fetch keeps the last good events and records
@@ -35,7 +37,7 @@ export async function getFeeds(): Promise<CalendarFeed[]> {
   const db = await sqlDb();
   return db.select(
     `SELECT f.id, f.name, f.enabled, f.last_synced_at, f.last_error,
-            (SELECT COUNT(*) FROM calendar_events e WHERE e.feed_id = f.id) AS events
+            (SELECT COUNT(*) FROM calendar_events e WHERE e.source = 'ics' AND e.feed_id = f.id) AS events
      FROM calendar_feeds f ORDER BY f.id`,
   );
 }
@@ -93,7 +95,7 @@ export async function syncCalendars(fetchFeed: FetchFeed = tauriFetch): Promise<
   for (const f of feeds) {
     try {
       const events = await fetchFeed(f.id, tz?.value?.trim() || null);
-      await db.execute("DELETE FROM calendar_events WHERE feed_id = ?", [f.id]);
+      await db.execute("DELETE FROM calendar_events WHERE source = 'ics' AND feed_id = ?", [f.id]);
       for (const e of events) {
         await db.execute(
           "INSERT INTO calendar_events (feed_id, uid, start, end, all_day, title, location) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -106,6 +108,8 @@ export async function syncCalendars(fetchFeed: FetchFeed = tauriFetch): Promise<
     }
   }
   announce();
+  // Google Calendar next to the feeds; it records its own errors.
+  if (!isTestDb()) await syncGoogle().catch(console.error);
 }
 
 /** Events of enabled feeds touching the local days [fromDay, toDay]. */
@@ -114,18 +118,33 @@ export async function getEvents(fromDay: string, toDay: string): Promise<Calenda
   const [fromUtc] = dayBoundsUtc(fromDay);
   const [, toUtc] = dayBoundsUtc(toDay);
   return db.select(
-    `SELECT e.* FROM calendar_events e JOIN calendar_feeds f ON f.id = e.feed_id AND f.enabled = 1
-     WHERE (e.all_day = 1 AND e.start <= ? AND e.end > ?)
-        OR (e.all_day = 0 AND e.start < ? AND e.end >= ?)
+    `SELECT e.* FROM calendar_events e
+     LEFT JOIN calendar_feeds f ON e.source = 'ics' AND f.id = e.feed_id
+     LEFT JOIN calendar_sources s ON e.source = 'google' AND s.calendar_id = e.calendar_id
+     WHERE ((e.source = 'ics' AND f.enabled = 1) OR (e.source = 'google' AND s.enabled = 1))
+       AND ((e.all_day = 1 AND e.start <= ? AND e.end > ?)
+        OR (e.all_day = 0 AND e.start < ? AND e.end >= ?))
      ORDER BY e.all_day DESC, e.start`,
     [toDay, fromDay, toUtc, fromUtc],
   );
 }
 
-/** Some enabled feed failed its last fetch: what is shown may be old. */
+/** Some enabled feed or Google calendar failed its last sync: what is shown may be old. */
 export async function calendarStale(): Promise<boolean> {
   const db = await sqlDb();
-  const [r] = await db.select<{ n: number }[]>("SELECT COUNT(*) AS n FROM calendar_feeds WHERE enabled = 1 AND last_error IS NOT NULL");
+  const [r] = await db.select<{ n: number }[]>(
+    `SELECT (SELECT COUNT(*) FROM calendar_feeds WHERE enabled = 1 AND last_error IS NOT NULL)
+          + (SELECT COUNT(*) FROM calendar_sources WHERE enabled = 1 AND last_error IS NOT NULL) AS n`,
+  );
+  return (r?.n ?? 0) > 0;
+}
+
+/** Any calendar to show: an enabled feed or Google calendar. */
+export async function hasCalendarSource(): Promise<boolean> {
+  const db = await sqlDb();
+  const [r] = await db.select<{ n: number }[]>(
+    "SELECT (SELECT COUNT(*) FROM calendar_feeds WHERE enabled = 1) + (SELECT COUNT(*) FROM calendar_sources WHERE enabled = 1) AS n",
+  );
   return (r?.n ?? 0) > 0;
 }
 
@@ -133,7 +152,7 @@ export async function calendarStale(): Promise<boolean> {
 export async function takeEventNudges(now = new Date()): Promise<CalendarEvent[]> {
   const db = await sqlDb();
   const [m] = await db.select<{ value: string }[]>("SELECT value FROM settings WHERE key = 'calendar_nudge_minutes'");
-  const minutes = Number(m?.value ?? 15);
+  const minutes = Number(m?.value ?? 60);
   if (!(minutes > 0)) return [];
   const today = new Date(now);
   const day = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

@@ -20,6 +20,7 @@ export const TodoRow = memo(function TodoRow({
   onOpen,
   onPick,
   notionWritable,
+  notionFailed,
 }: {
   item: ListItem;
   record: TodoRecord | null;
@@ -32,6 +33,8 @@ export const TodoRow = memo(function TodoRow({
   onPick: (key: string) => void;
   /** With "Notion writes" on, a Notion row can be ticked (Done in Notion). */
   notionWritable?: boolean;
+  /** The last write of this Notion row to Notion failed (details in the panel and Integrations). */
+  notionFailed?: boolean;
 }) {
   const notion = item.kind === "notion";
   const due = item.due_date ? dueChip(item.due_date, item.due_time, today) : null;
@@ -73,6 +76,12 @@ export const TodoRow = memo(function TodoRow({
         <span className="trow__title-line">
           <span className="trow__title">{item.title}</span>
           {notion && <span className="badge-notion">NOTION</span>}
+          {notionFailed && (
+            <span className="tchip tchip--overdue">
+              <i className="ti ti-alert-triangle" aria-hidden="true" />
+              {t("todo.notion.writeFailed")}
+            </span>
+          )}
         </span>
         <span className="trow__meta">
           {due && <span className={`tchip tchip--${item.done ? "later" : due.tone}`}>{due.text}</span>}

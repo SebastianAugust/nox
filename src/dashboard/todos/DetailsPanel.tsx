@@ -16,6 +16,10 @@ import {
   type TodoReminder,
 } from "../../lib/todoRepo";
 import type { AssignmentRow } from "../../lib/db-helpers";
+import { apiErrorText } from "../../lib/api";
+
+/** An outbox failure: an API error or a conflict (both have a kind). */
+type ApiErrorLike = { kind: string };
 import { suggestSteps } from "../../lib/capture";
 import type { Priority } from "../../lib/todoParse";
 import { ChunkyButton, IconButton } from "../../components/ui/controls";
@@ -616,11 +620,18 @@ export function TodoDetails({
   );
 }
 
-/** The panel for a Notion assignment: read-only, with "Add to my todos". */
+/**
+ * The panel for a Notion assignment. Read-only, with "Add to my todos";
+ * with "Notion writes" on, the title and date can be changed (sent to
+ * Notion through the outbox; nothing else of the page is editable).
+ */
 export function NotionDetails({
   assignment,
   copiedId,
   today,
+  writable = false,
+  failure = null,
+  onChange,
   onClose,
   onCopy,
   onOpenCopy,
@@ -628,26 +639,93 @@ export function NotionDetails({
   assignment: AssignmentRow;
   copiedId: number | null;
   today: string;
+  writable?: boolean;
+  /** The last Done/title/date write for this page failed. */
+  failure?: ApiErrorLike | null;
+  onChange?: (change: { name?: string; due_date?: string; due_time?: string | null }) => void;
   onClose: () => void;
   onCopy: () => void;
   onOpenCopy: (id: number) => void;
 }) {
   const date = assignment.due_date.slice(0, 10);
   const time = assignment.due_date.length >= 16 ? assignment.due_date.slice(11, 16) : null;
+  const [title, setTitle] = useState(assignment.name);
+  useEffect(() => {
+    if (document.activeElement?.id !== "nd-title") setTitle(assignment.name);
+  }, [assignment.notion_id, assignment.name]);
+  const editable = writable && !!onChange;
+
+  const saveTitle = () => {
+    const next = title.trim();
+    if (!next) return setTitle(assignment.name);
+    if (next !== assignment.name) onChange?.({ name: next });
+  };
+
   return (
     <aside id="todo-details" className="details" aria-label={t("todo.details.label")}>
       <div className="details__head">
-        <h2 className="details__heading">{assignment.name}</h2>
+        {editable ? (
+          <>
+            <label htmlFor="nd-title" className="sr-only">
+              {t("todo.details.title")}
+            </label>
+            <textarea
+              id="nd-title"
+              className="details__title"
+              rows={1}
+              value={title}
+              maxLength={300}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={saveTitle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                }
+                if (e.key === "Escape") setTitle(assignment.name);
+              }}
+            />
+          </>
+        ) : (
+          <h2 className="details__heading">{assignment.name}</h2>
+        )}
         <CloseButton onClose={onClose} />
       </div>
       <p className="details__notion">
         <span className="badge-notion">NOTION</span>
-        {t("todo.notion.readOnly")}
+        {t(editable ? "todo.notion.synced" : "todo.notion.readOnly")}
       </p>
+      {failure && (
+        <p className="field-error" role="alert">
+          {t("todo.notion.writeFailedHint", { reason: apiErrorText(failure, "notion") })}
+        </p>
+      )}
       <div className="details__row">
         <div className="details__field">
-          <span className="details__label">{t("todo.details.due")}</span>
-          <span className="details__value">{dueChip(date, time, today).text}</span>
+          <span className="details__label" id="nd-due-label">
+            {t("todo.details.due")}
+          </span>
+          {editable ? (
+            <div className="details__pair" role="group" aria-labelledby="nd-due-label">
+              <input
+                type="date"
+                className="field details__input"
+                aria-label={t("todo.details.date")}
+                value={date}
+                required
+                onChange={(e) => e.target.value && onChange?.({ due_date: e.target.value, due_time: time })}
+              />
+              <input
+                type="time"
+                className="field details__input details__input--time"
+                aria-label={t("todo.details.time")}
+                value={time ?? ""}
+                onChange={(e) => onChange?.({ due_date: date, due_time: e.target.value || null })}
+              />
+            </div>
+          ) : (
+            <span className="details__value">{dueChip(date, time, today).text}</span>
+          )}
         </div>
         <div className="details__field">
           <span className="details__label">{t("todo.details.course")}</span>

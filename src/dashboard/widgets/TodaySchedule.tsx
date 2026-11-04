@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { calendarStale, getEvents, getFeeds } from "../../lib/calendar";
+import { calendarStale, getEvents, hasCalendarSource } from "../../lib/calendar";
 import { eventsOn, localClock, localDay, nowNext, type CalendarEvent } from "../../lib/calendarLogic";
 import { t } from "../../lib/i18n";
 import { Card, Tag } from "../../components/ui/controls";
@@ -14,10 +14,10 @@ export default function TodaySchedule() {
 
   const load = useCallback(() => {
     const today = localDay(new Date());
-    Promise.all([getEvents(today, today), getFeeds(), calendarStale()])
+    Promise.all([getEvents(today, today), hasCalendarSource(), calendarStale()])
       .then(([e, feeds, s]) => {
         setEvents(eventsOn(e, today));
-        setHasFeeds(feeds.some((f) => f.enabled));
+        setHasFeeds(feeds);
         setStale(s);
         setNow(new Date());
       })

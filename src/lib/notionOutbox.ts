@@ -1,20 +1,29 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { asApiError, type ApiError } from "./api";
-import { normalizeId } from "./notionMapping";
+import { mapAssignment, normalizeId, resolveMapping, schemaOf, type MappedAssignment, type NotionRow } from "./notionMapping";
 import { matchName } from "./todoLogic";
 import { isTestDb, sqlDb } from "./todoRepo";
 
 /**
- * Notion write-back, through an outbox. Only two operations exist: set the
- * Done checkbox of an assignment, and create an assignment page. Nothing is
- * written while `notion_write_enabled` is off.
+ * Notion write-back, through an outbox. Only three operations exist: set the
+ * Done checkbox of an assignment, create an assignment page, and change the
+ * title and/or date of an assignment. Nothing is written while
+ * `notion_write_enabled` is off.
  *
  * Every write is a row in `notion_outbox` first, so an offline or failed call
  * is retried on app start, after each sync and right after queueing, up to
  * MAX_ATTEMPTS times; then it stays `failed` with a Retry in Integrations.
- * A queued write is never dropped silently, and a failed Done is not
+ * A queued write is never dropped silently, and a failed write is not
  * reverted locally.
+ *
+ * Conflict rule (Done and updates): each queued write remembers when the
+ * local copy was synced (`synced_at`). Rust reads the page first; if it was
+ * edited in Notion since then, nothing is written and the fresh page comes
+ * back. The local copy is refreshed from it, and then the write is sent on
+ * top of the fresh data. For a title or date that was itself changed in
+ * Notion meanwhile, Notion's value wins: the write stops as `conflict`
+ * (visible, with Retry to apply Nox's value anyway).
  *
  * Creates are not idempotent in Notion, so once an attempt may have reached
  * Notion (timeout, dropped connection), the next attempt passes
@@ -22,8 +31,10 @@ import { isTestDb, sqlDb } from "./todoRepo";
  */
 
 export const MAX_ATTEMPTS = 5;
+/** No known sync time: treat the page as changed (refresh first). */
+const EPOCH = "1970-01-01T00:00:00Z";
 
-export type SetDonePayload = { page_id: string; done: boolean };
+export type SetDonePayload = { page_id: string; done: boolean; synced_at?: string | null };
 export type CreatePayload = {
   database_id: string;
   name: string;
@@ -38,10 +49,26 @@ export type CreatePayload = {
   /** Filled in once sent. */
   page_id?: string;
 };
+/** Title and/or date of an existing assignment; null = unchanged. */
+export type UpdatePayload = {
+  page_id: string;
+  name: string | null;
+  date_iso: string | null;
+  due_local: string | null;
+  /** The local values when the first edit was made: what Bas saw. */
+  base_name: string;
+  base_due: string | null;
+  /** The local copy's sync time when the first edit was made. */
+  synced_at: string | null;
+  /** Retry after a conflict: apply Nox's values over Notion's. */
+  force?: boolean;
+};
+
+export type OutboxOp = "set_done" | "create" | "update";
 
 export type OutboxRow = {
   id: number;
-  op: "set_done" | "create";
+  op: OutboxOp;
   payload: string;
   status: "pending" | "sent" | "failed";
   attempts: number;
@@ -51,15 +78,22 @@ export type OutboxRow = {
   uncertain_since: string | null;
 };
 
+/** What Rust's update commands return. */
+export type WriteResult = { stale: boolean; written: boolean; row: NotionRow };
+
+/** An outbox error: an API error, or a title/date also changed in Notion. */
+export type OutboxError = ApiError | { kind: "conflict"; fields: ("name" | "date")[] };
+
 // ── Transport (the Rust commands; tests swap it) ──
 
 export type Transport = {
-  setDone(pageId: string, done: boolean): Promise<unknown>;
+  setDone(pageId: string, done: boolean, syncedAt: string | null): Promise<WriteResult | void>;
   create(p: CreatePayload, existingSince: string | null): Promise<{ pageId: string; existed: boolean }>;
+  update(p: UpdatePayload, syncedAt: string | null): Promise<WriteResult>;
 };
 
 const tauriTransport: Transport = {
-  setDone: (pageId, done) => invoke("notion_set_done", { pageId, done }),
+  setDone: (pageId, done, syncedAt) => invoke("notion_set_done", { pageId, done, syncedAt }),
   create: (p, existingSince) =>
     invoke("notion_create_assignment", {
       databaseId: p.database_id,
@@ -68,6 +102,8 @@ const tauriTransport: Transport = {
       coursePageId: p.course_page_id,
       existingSince,
     }),
+  update: (p, syncedAt) =>
+    invoke("notion_update_assignment", { pageId: p.page_id, name: p.name, dateIso: p.date_iso, syncedAt }),
 };
 let transport = tauriTransport;
 /** Tests only. */
@@ -105,9 +141,30 @@ export function toNotionDate(date: string | null | undefined, time: string | nul
   return `${date}T${time}:00${sign}${pad(Math.floor(Math.abs(off) / 60))}:${pad(Math.abs(off) % 60)}`;
 }
 
+type LocalAssignment = { name: string; due_date: string | null; last_synced_at: string | null };
+
+async function localAssignment(id: string): Promise<LocalAssignment | null> {
+  const db = await sqlDb();
+  const [row] = await db.select<LocalAssignment[]>(
+    "SELECT name, due_date, last_synced_at FROM notion_assignments WHERE notion_id = ? AND status != 'removed'",
+    [id],
+  );
+  return row ?? null;
+}
+
+async function pendingFor<T extends { page_id: string }>(op: OutboxOp, id: string): Promise<(OutboxRow & { p: T }) | null> {
+  const db = await sqlDb();
+  const rows = await db.select<OutboxRow[]>("SELECT * FROM notion_outbox WHERE op = ? AND status = 'pending'", [op]);
+  for (const r of rows) {
+    const p = JSON.parse(r.payload) as T;
+    if (p.page_id === id) return { ...r, p };
+  }
+  return null;
+}
+
 // ── Queueing ──
 
-export type QueueResult = "queued" | "off" | "notConfigured" | "linked" | "empty";
+export type QueueResult = "queued" | "off" | "notConfigured" | "linked" | "empty" | "missing";
 
 /**
  * Mark an assignment done (or not) in Notion. The local row changes at once
@@ -117,15 +174,63 @@ export async function queueSetDone(pageId: string, done: boolean): Promise<Queue
   if (!(await writesEnabled())) return "off";
   const id = normalizeId(pageId);
   const db = await sqlDb();
+  const local = await localAssignment(id);
   await db.execute("UPDATE notion_assignments SET status = ? WHERE notion_id = ? AND status != 'removed'", [
     done ? "done" : "pending",
     id,
   ]);
-  const pending = await db.select<OutboxRow[]>("SELECT * FROM notion_outbox WHERE op = 'set_done' AND status = 'pending'");
-  const same = pending.find((r) => (JSON.parse(r.payload) as SetDonePayload).page_id === id);
-  const payload = JSON.stringify({ page_id: id, done } satisfies SetDonePayload);
-  if (same) await db.execute("UPDATE notion_outbox SET payload = ? WHERE id = ?", [payload, same.id]);
-  else await db.execute("INSERT INTO notion_outbox (op, payload) VALUES ('set_done', ?)", [payload]);
+  const same = await pendingFor<SetDonePayload>("set_done", id);
+  // Merged: the first edit's sync time stays, so the conflict rule still sees it.
+  const payload: SetDonePayload = { page_id: id, done, synced_at: same ? (same.p.synced_at ?? null) : (local?.last_synced_at ?? null) };
+  if (same) await db.execute("UPDATE notion_outbox SET payload = ? WHERE id = ?", [JSON.stringify(payload), same.id]);
+  else await db.execute("INSERT INTO notion_outbox (op, payload) VALUES ('set_done', ?)", [JSON.stringify(payload)]);
+  announce();
+  return "queued";
+}
+
+/**
+ * Change an assignment's title and/or date in Notion (nothing else). The
+ * local row changes at once; a pending update for the same page is merged
+ * (the newest values win, the first edit's base and sync time stay).
+ */
+export async function queueUpdate(
+  pageId: string,
+  change: { name?: string | null; due_date?: string | null; due_time?: string | null },
+): Promise<QueueResult> {
+  if (!(await writesEnabled())) return "off";
+  const id = normalizeId(pageId);
+  const local = await localAssignment(id);
+  if (!local) return "missing";
+  const name = change.name?.trim() || null;
+  const dateIso = change.due_date ? toNotionDate(change.due_date, change.due_time) : null;
+  if (typeof change.name === "string" && !name) return "empty";
+  if (!name && !dateIso) return "empty";
+  const dueLocal = dateIso ? `${change.due_date}${change.due_time ? ` ${change.due_time}` : ""}` : null;
+
+  const db = await sqlDb();
+  await db.execute(
+    "UPDATE notion_assignments SET name = COALESCE(?, name), due_date = COALESCE(?, due_date) WHERE notion_id = ?",
+    [name, dueLocal, id],
+  );
+  const same = await pendingFor<UpdatePayload>("update", id);
+  const payload: UpdatePayload = same
+    ? {
+        ...same.p,
+        name: name ?? same.p.name,
+        date_iso: dateIso ?? same.p.date_iso,
+        due_local: dueLocal ?? same.p.due_local,
+      }
+    : {
+        page_id: id,
+        name,
+        date_iso: dateIso,
+        due_local: dueLocal,
+        base_name: local.name,
+        base_due: local.due_date,
+        synced_at: local.last_synced_at,
+      };
+  if (same) await db.execute("UPDATE notion_outbox SET payload = ? WHERE id = ?", [JSON.stringify(payload), same.id]);
+  else await db.execute("INSERT INTO notion_outbox (op, payload) VALUES ('update', ?)", [JSON.stringify(payload)]);
   announce();
   return "queued";
 }
@@ -178,6 +283,72 @@ export async function queueCreate(input: {
   return { result: "queued", courseMatched: !!course || !input.course?.trim(), course: course?.name ?? null };
 }
 
+// ── Refreshing the local copy ──
+
+const MAP_SETTINGS = {
+  title: "notion_map_title",
+  due: "notion_map_due",
+  course: "notion_map_course",
+  status: "notion_map_status",
+  done: "notion_map_done",
+} as const;
+
+/**
+ * Write one page as Notion has it into the local copy (as a sync would) and
+ * mark it synced now. Returns the mapped values, or null when the page
+ * cannot be mapped (then the local row is left as it is).
+ */
+export async function refreshLocal(row: NotionRow): Promise<MappedAssignment | null> {
+  const db = await sqlDb();
+  const config: Record<string, string> = {};
+  for (const [field, key] of Object.entries(MAP_SETTINGS)) {
+    const v = await setting(key);
+    if (v) config[field] = v;
+  }
+  const mapping = resolveMapping(schemaOf([row]), config);
+  if (!mapping.ok) return null;
+  const courses = await db.select<{ notion_id: string; name: string }[]>("SELECT notion_id, name FROM notion_courses");
+  const a = mapAssignment(row, mapping.mapping, new Map(courses.map((c) => [c.notion_id, c.name])));
+  if (!a.name) return null;
+  const status = a.archived ? "removed" : a.done ? "done" : "pending";
+  await db.execute(
+    `UPDATE notion_assignments SET name = ?, due_date = ?, course = ?, course_notion_id = ?, notion_status = ?,
+       status = ?, synced_at = datetime('now'), last_synced_at = ?
+     WHERE notion_id = ?`,
+    [a.name, a.due_date, a.course, a.course_notion_id, a.notion_status, status, new Date().toISOString(), a.notion_id],
+  );
+  return a;
+}
+
+/**
+ * After a sync: put local edits that are still queued or failed back on top
+ * of what the sync wrote, so a write that has not reached Notion is never
+ * reverted silently. A conflict is not re-applied (Notion's value stands
+ * until Retry).
+ */
+export async function applyOutboxOverlay(): Promise<void> {
+  const db = await sqlDb();
+  const rows = await db.select<OutboxRow[]>(
+    "SELECT * FROM notion_outbox WHERE op IN ('set_done', 'update') AND status IN ('pending', 'failed') ORDER BY id",
+  );
+  for (const r of rows) {
+    if (r.status === "failed" && r.last_error && (JSON.parse(r.last_error) as OutboxError).kind === "conflict") continue;
+    if (r.op === "set_done") {
+      const p = JSON.parse(r.payload) as SetDonePayload;
+      await db.execute("UPDATE notion_assignments SET status = ? WHERE notion_id = ? AND status != 'removed'", [
+        p.done ? "done" : "pending",
+        p.page_id,
+      ]);
+    } else {
+      const p = JSON.parse(r.payload) as UpdatePayload;
+      await db.execute(
+        "UPDATE notion_assignments SET name = COALESCE(?, name), due_date = COALESCE(?, due_date) WHERE notion_id = ? AND status != 'removed'",
+        [p.name, p.due_local, p.page_id],
+      );
+    }
+  }
+}
+
 // ── Sending ──
 
 /** Errors after which a create might nevertheless have happened. */
@@ -213,6 +384,46 @@ async function mirrorCreated(p: CreatePayload, pageId: string) {
   }
 }
 
+class Conflict extends Error {
+  constructor(readonly fields: ("name" | "date")[]) {
+    super("conflict");
+  }
+}
+
+/** Done: refresh first when the page changed in Notion, then write. */
+async function sendSetDone(p: SetDonePayload) {
+  const r = await transport.setDone(p.page_id, p.done, p.synced_at ?? EPOCH);
+  if (r?.stale) {
+    await refreshLocal(r.row);
+    const again = await transport.setDone(p.page_id, p.done, null);
+    if (again) await refreshLocal(again.row);
+  } else if (r) {
+    await refreshLocal(r.row);
+  }
+}
+
+/**
+ * Title/date: refresh first when the page changed in Notion; a field that
+ * Notion itself changed since Bas's edit is a conflict (Notion wins), the
+ * rest is written on top of the fresh data.
+ */
+async function sendUpdate(p: UpdatePayload) {
+  const first = await transport.update(p, p.force ? null : (p.synced_at ?? EPOCH));
+  if (!first.stale) {
+    await refreshLocal(first.row);
+    return;
+  }
+  const fresh = await refreshLocal(first.row);
+  if (fresh && !p.force) {
+    const fields: ("name" | "date")[] = [];
+    if (p.name !== null && fresh.name !== p.base_name && fresh.name !== p.name) fields.push("name");
+    if (p.due_local !== null && fresh.due_date !== p.base_due && fresh.due_date !== p.due_local) fields.push("date");
+    if (fields.length) throw new Conflict(fields);
+  }
+  const written = await transport.update(p, null);
+  await refreshLocal(written.row);
+}
+
 let flushing: Promise<{ sent: number; failed: number }> | null = null;
 
 /** Send every pending write, oldest first. One run at a time; never throws. */
@@ -227,8 +438,10 @@ export function flushOutbox(): Promise<{ sent: number; failed: number }> {
       for (const row of rows) {
         try {
           if (row.op === "set_done") {
-            const p = JSON.parse(row.payload) as SetDonePayload;
-            await transport.setDone(p.page_id, p.done);
+            await sendSetDone(JSON.parse(row.payload) as SetDonePayload);
+            await db.execute("UPDATE notion_outbox SET status = 'sent', sent_at = datetime('now'), last_error = NULL WHERE id = ?", [row.id]);
+          } else if (row.op === "update") {
+            await sendUpdate(JSON.parse(row.payload) as UpdatePayload);
             await db.execute("UPDATE notion_outbox SET status = 'sent', sent_at = datetime('now'), last_error = NULL WHERE id = ?", [row.id]);
           } else {
             const p = JSON.parse(row.payload) as CreatePayload;
@@ -241,6 +454,16 @@ export function flushOutbox(): Promise<{ sent: number; failed: number }> {
           }
           sent++;
         } catch (err) {
+          if (err instanceof Conflict) {
+            // Not a transient error: retrying would hit it again. Shown at once.
+            failed++;
+            const e: OutboxError = { kind: "conflict", fields: err.fields };
+            await db.execute("UPDATE notion_outbox SET attempts = attempts + 1, status = 'failed', last_error = ? WHERE id = ?", [
+              JSON.stringify(e),
+              row.id,
+            ]);
+            continue;
+          }
           const e = asApiError(err);
           if (e.kind === "writesOff") break; // switched off meanwhile: wait, do not count
           const attempts = row.attempts + 1;
@@ -266,10 +489,20 @@ export function flushOutbox(): Promise<{ sent: number; failed: number }> {
   return flushing;
 }
 
-/** Retry a failed write (Integrations): back to pending with fresh attempts. */
+/**
+ * Retry a failed write (Integrations): back to pending with fresh attempts.
+ * After a conflict, Retry means "use Nox's value anyway": the update is sent
+ * over Notion's (still only title/date).
+ */
 export async function retryOutbox(id: number): Promise<void> {
   const db = await sqlDb();
-  await db.execute("UPDATE notion_outbox SET status = 'pending', attempts = 0 WHERE id = ? AND status = 'failed'", [id]);
+  const [row] = await db.select<OutboxRow[]>("SELECT * FROM notion_outbox WHERE id = ? AND status = 'failed'", [id]);
+  if (!row) return;
+  let payload = row.payload;
+  if (row.op === "update" && row.last_error && (JSON.parse(row.last_error) as OutboxError).kind === "conflict") {
+    payload = JSON.stringify({ ...(JSON.parse(row.payload) as UpdatePayload), force: true });
+  }
+  await db.execute("UPDATE notion_outbox SET status = 'pending', attempts = 0, payload = ? WHERE id = ?", [payload, id]);
   announce();
 }
 
@@ -286,4 +519,18 @@ export async function outboxStatus(): Promise<{ pending: number; failed: (Outbox
       return { ...r, title: r.op === "create" ? p.name : (byId.get(p.page_id) ?? p.page_id) };
     }),
   };
+}
+
+/** Failed Done/title/date writes by page id, for the rows on the Todos page. */
+export async function failedWrites(): Promise<Map<string, OutboxError>> {
+  const db = await sqlDb();
+  const rows = await db.select<OutboxRow[]>(
+    "SELECT * FROM notion_outbox WHERE status = 'failed' AND op IN ('set_done', 'update') ORDER BY id",
+  );
+  const out = new Map<string, OutboxError>();
+  for (const r of rows) {
+    const p = JSON.parse(r.payload) as { page_id: string };
+    out.set(p.page_id, r.last_error ? (JSON.parse(r.last_error) as OutboxError) : { kind: "badResponse" });
+  }
+  return out;
 }

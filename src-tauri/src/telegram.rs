@@ -80,6 +80,12 @@ fn valid_data(d: &str) -> bool {
     !d.is_empty() && d.len() <= 64 && d.chars().all(|c| c.is_ascii_alphanumeric() || ":_-".contains(c))
 }
 
+/// Button presses count only from the paired private chat; anything else
+/// (another chat, a group, nothing paired yet) is dropped.
+fn from_paired_chat(chat_id: i64, kind: &str, paired: Option<i64>) -> bool {
+    paired == Some(chat_id) && kind == "private"
+}
+
 /// A button press: (chat, chat type, Incoming). Only data Nox could have set.
 fn callback(update: &Value) -> Option<(i64, String, Incoming)> {
     let cb = &update["callback_query"];
@@ -137,7 +143,7 @@ pub async fn telegram_poll(app: AppHandle, offset: i64) -> Result<PollResult, Ap
         }
         // Inline-button presses: from the paired private chat only.
         if let Some((chat_id, kind, msg)) = callback(update) {
-            if Some(chat_id) == chat && kind == "private" {
+            if from_paired_chat(chat_id, &kind, chat) {
                 result.messages.push(msg);
             }
             continue;
@@ -305,6 +311,17 @@ mod tests {
         let blob = "x".repeat(9000);
         let parts = split_message(&blob, 4096);
         assert_eq!(parts.iter().map(String::len).sum::<usize>(), 9000);
+    }
+
+    #[test]
+    fn button_presses_count_only_from_the_paired_private_chat() {
+        assert!(from_paired_chat(7, "private", Some(7)));
+        assert!(!from_paired_chat(8, "private", Some(7)));
+        assert!(!from_paired_chat(7, "group", Some(7)));
+        assert!(!from_paired_chat(7, "private", None));
+        // Pending-action buttons pass the data check; anything else does not.
+        assert!(valid_data("pa:yes:12") && valid_data("pa:no:3"));
+        assert!(!valid_data("pa:yes:12; rm"));
     }
 
     #[test]

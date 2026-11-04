@@ -24,14 +24,25 @@ const dueOf = (due: string | null | undefined) =>
 
 type Case = {
   text: string;
-  expect: { intent: string; title?: string; due?: string | null; time?: string; priority?: number; list?: string; course?: string };
+  expect: {
+    intent: string;
+    title?: string;
+    due?: string | null;
+    time?: string;
+    end?: string;
+    location?: string;
+    priority?: number;
+    list?: string;
+    course?: string;
+  };
   mock: object;
 };
 const cases = (fixtures as { cases: Case[] }).cases;
 
 describe("capture fixtures with a mocked model", () => {
-  it("has at least 30 phrases in both languages", () => {
-    expect(cases.length).toBeGreaterThanOrEqual(30);
+  it("has at least 40 phrases in both languages, events included", () => {
+    expect(cases.length).toBeGreaterThanOrEqual(40);
+    expect(cases.filter((c) => c.expect.intent === "event").length).toBeGreaterThanOrEqual(8);
   });
 
   for (const c of cases) {
@@ -48,7 +59,14 @@ describe("capture fixtures with a mocked model", () => {
       }
       expect(called).toBe(true);
       expect(p).toMatchObject({ intent: c.expect.intent, title: c.expect.title });
-      const proposal = p as Exclude<Proposal, { intent: "chat" }>;
+      if (p.intent === "event") {
+        expect(p.due_date).toBe(dueOf(c.expect.due));
+        expect(p.due_time).toBe(c.expect.time);
+        expect(p.end_time).toBe(c.expect.end);
+        expect(p.location).toBe(c.expect.location);
+        return;
+      }
+      const proposal = p as Extract<Proposal, { intent: "todo" | "reminder" }>;
       expect(proposal.due_date).toBe(dueOf(c.expect.due));
       expect(proposal.due_time).toBe(c.expect.time);
       if (c.expect.priority !== undefined) expect(proposal.priority).toBe(c.expect.priority);

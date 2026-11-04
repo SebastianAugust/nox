@@ -28,7 +28,7 @@ import {
   type TodoPatch,
   type TodoRecord,
 } from "../../lib/todoRepo";
-import { queueCreate, queueSetDone } from "../../lib/notionOutbox";
+import { failedWrites, queueCreate, queueSetDone, queueUpdate, type OutboxError } from "../../lib/notionOutbox";
 import { MoonStars } from "../../components/deco/Deco";
 import { usePomodoro } from "../../components/Pomodoro";
 import { ChunkyButton, Toggle } from "../../components/ui/controls";
@@ -79,18 +79,21 @@ type Data = {
   showNotion: boolean;
   /** "Notion writes" is on: Notion rows can be ticked, todos sent. */
   notionWrite: boolean;
+  /** Failed Done/title/date writes by Notion page id (shown on the row). */
+  notionFailed: Map<string, OutboxError>;
   timeZone?: string;
 };
 
 async function load(): Promise<Data> {
   const s = await getSettings(["notion_assignments_db_id", "todos_show_notion", "user_timezone", "notion_write_enabled"]);
   const notionSetUp = !!s.notion_assignments_db_id;
-  const [todos, lists, courses, notion, copied] = await Promise.all([
+  const [todos, lists, courses, notion, copied, notionFailed] = await Promise.all([
     listTodos(),
     getLists(),
     courseNames(),
     notionSetUp ? getOpenAssignments(undefined, 300) : Promise.resolve([]),
     copiedNotionIds(),
+    notionSetUp ? failedWrites() : Promise.resolve(new Map<string, OutboxError>()),
   ]);
   return {
     todos,
@@ -101,6 +104,7 @@ async function load(): Promise<Data> {
     notionSetUp,
     showNotion: s.todos_show_notion !== "false",
     notionWrite: notionSetUp && s.notion_write_enabled === "true",
+    notionFailed,
     timeZone: s.user_timezone?.trim() || undefined,
   };
 }
@@ -589,6 +593,7 @@ export default function PageTodos({
                           onOpen={openItem}
                           onPick={pick}
                           notionWritable={data.notionWrite}
+                          notionFailed={item.kind === "notion" && data.notionFailed.has(item.key.slice(2))}
                         />
                       ))}
                     </ul>
@@ -638,6 +643,20 @@ export default function PageTodos({
             assignment={openAssignment}
             copiedId={data.copied.get(openAssignment.notion_id) ?? null}
             today={today}
+            writable={data.notionWrite}
+            failure={data.notionFailed.get(openAssignment.notion_id) ?? null}
+            onChange={(change) =>
+              // Optimistic (the local row changes now) and queued; a failure
+              // shows on the row and in Integrations, never reverted silently.
+              void queueUpdate(openAssignment.notion_id, change)
+                .then((r) => {
+                  if (r === "off") return show({ text: t("api.writesOff"), tone: "info" });
+                  if (r === "queued") {
+                    show({ text: t("todo.toast.notionUpdated", { title: change.name ?? openAssignment.name }), tone: "info" });
+                  }
+                })
+                .catch(fail)
+            }
             onClose={() => setSelected(null)}
             onOpenCopy={(id) => setSelected(todoKey(id))}
             onCopy={() =>

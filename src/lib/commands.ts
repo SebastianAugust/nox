@@ -15,6 +15,7 @@
 import type { I18nKey } from "./i18n";
 import type { Urgency } from "./deadlines";
 import { parseQuickAdd, type Priority, type QuickAdd } from "./todoParse";
+import { parseEventText, type EventDraft } from "./eventParse";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -111,6 +112,10 @@ export type CommandError =
   | "badNumber"
   | "badMinutes"
   | "notionAddEmpty"
+  | "notionEditEmpty"
+  | "notionMoveDate"
+  | "eventEmpty"
+  | "eventNoTitle"
   | "scheduleArg";
 
 export type Command =
@@ -118,6 +123,10 @@ export type Command =
   /** Notion write-back (only with "Notion writes" on). */
   | { kind: "notionAdd"; quick: QuickAdd }
   | { kind: "notionDone"; n: number }
+  | { kind: "notionEdit"; n: number; title: string }
+  | { kind: "notionMove"; n: number; due_date: string; due_time?: string }
+  /** A Google Calendar event, created only after a confirmation. */
+  | { kind: "event"; draft: EventDraft }
   /** Parsed by the same quick-add parser as the Todos page. */
   | { kind: "todoAdd"; quick: QuickAdd }
   | { kind: "todoList" }
@@ -137,7 +146,7 @@ export type Command =
 
 // Indonesian name first, English aliases after. Telegram's menu sends /start.
 type Bare = "stop" | "status" | "weather" | "help" | "clear" | "dashboard";
-type WithArg = "tasks" | "todo" | "done" | "remindAny" | "focus" | "place" | "schedule";
+type WithArg = "tasks" | "todo" | "done" | "remindAny" | "focus" | "place" | "schedule" | "event";
 const ALIASES: Record<string, Bare | WithArg> = {
   tugas: "tasks",
   tasks: "tasks",
@@ -159,6 +168,8 @@ const ALIASES: Record<string, Bare | WithArg> = {
   jadwal: "schedule",
   schedule: "schedule",
   agenda: "schedule",
+  event: "event",
+  acara: "event",
   location: "place",
   tempat: "place",
   place: "place",
@@ -206,6 +217,26 @@ export function parseReminderTime(text: string, now = new Date()): { at: Date; t
 }
 
 /**
+ * Only a date (and maybe a time), for `/tugas tunda`: "2026-11-20",
+ * "2026-11-20 23:59", or anything the todo parser reads as a date with no
+ * words left over ("jumat", "besok 08:00", "20 nov"). Null otherwise.
+ */
+export function parseDueOnly(text: string, now = new Date()): { due_date: string; due_time?: string } | null {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{1,2})[:.](\d{2}))?$/.exec(text);
+  if (iso) {
+    const [, y, mo, d, h, mi] = iso;
+    const date = new Date(+y, +mo - 1, +d);
+    if (date.getMonth() !== +mo - 1 || date.getDate() !== +d) return null;
+    if (h === undefined) return { due_date: `${y}-${mo}-${d}` };
+    if (+h > 23 || +mi > 59) return null;
+    return { due_date: `${y}-${mo}-${d}`, due_time: `${pad(+h)}:${mi}` };
+  }
+  const q = parseQuickAdd(text, now);
+  if (!q.due_date || q.title.trim()) return null;
+  return q.due_time ? { due_date: q.due_date, due_time: q.due_time } : { due_date: q.due_date };
+}
+
+/**
  * Parse one line. Returns null when it is not a command (does not start
  * with "/"), so the caller sends it to the chat model instead.
  */
@@ -221,10 +252,23 @@ export function parseCommand(input: string, now = new Date()): Command | null {
       return { kind: "unknown", name };
     case "tasks": {
       if (!arg) return { kind: "tasks" };
-      // Notion write-back: /tugas tambah <text>, /tugas selesai <n>.
-      const sub = /^(tambah|add|selesai|done)\b\s*([\s\S]*)$/i.exec(arg);
+      // Notion write-back: /tugas tambah <text>, /tugas selesai <n>,
+      // /tugas ubah <n> <title>, /tugas tunda <n> <date>.
+      const sub = /^(tambah|add|selesai|done|ubah|edit|rename|tunda|move|reschedule)\b\s*([\s\S]*)$/i.exec(arg);
       if (sub) {
         const rest = sub[2].trim();
+        if (/^(ubah|edit|rename)$/i.test(sub[1])) {
+          const m = /^(\d{1,4})\s+([\s\S]+)$/.exec(rest);
+          const n = m ? positive(m[1]) : null;
+          const title = m?.[2].trim().slice(0, 2000);
+          return n && title ? { kind: "notionEdit", n, title } : { kind: "error", error: "notionEditEmpty" };
+        }
+        if (/^(tunda|move|reschedule)$/i.test(sub[1])) {
+          const m = /^(\d{1,4})\s+([\s\S]+)$/.exec(rest);
+          const n = m ? positive(m[1]) : null;
+          const due = m ? parseDueOnly(m[2].trim(), now) : null;
+          return n && due ? { kind: "notionMove", n, ...due } : { kind: "error", error: "notionMoveDate" };
+        }
         if (/^(tambah|add)$/i.test(sub[1])) {
           if (!rest) return { kind: "error", error: "notionAddEmpty" };
           const quick = parseQuickAdd(rest, now);
@@ -264,6 +308,10 @@ export function parseCommand(input: string, now = new Date()): Command | null {
       if (/^(minggu|week|pekan|7)$/i.test(arg)) return { kind: "schedule", range: "week" };
       return { kind: "error", error: "scheduleArg" };
     }
+    case "event": {
+      const p = parseEventText(arg, now);
+      return p.ok ? { kind: "event", draft: p.draft } : { kind: "error", error: p.error };
+    }
     case "place":
       return arg ? { kind: "place", name: arg.slice(0, 40) } : { kind: "place" };
     case "focus": {
@@ -295,6 +343,11 @@ export type CommandResult =
   | { kind: "taskMissing"; n: number }
   | { kind: "notionQueued"; title: string; course: string | null; courseMissing: string | null }
   | { kind: "notionDoneQueued"; name: string }
+  | { kind: "notionRenamed"; old: string; name: string }
+  | { kind: "notionMoved"; name: string; due_date: string; due_time?: string }
+  /** A question with Confirm / Cancel (pending action `actionId`). */
+  | { kind: "confirm"; actionId: number; text: string }
+  | { kind: "eventNoGoogle" }
   | { kind: "notionOff" }
   | { kind: "notionNotSetUp" }
   | { kind: "notionLinked" }
@@ -397,6 +450,19 @@ export function renderResult(r: CommandResult, tr: Translate, now = new Date()):
         .join(" ");
     case "notionDoneQueued":
       return tr("cmd.notion.doneQueued", { name: r.name });
+    case "confirm":
+      return r.text;
+    case "eventNoGoogle":
+      return tr("cmd.event.noGoogle");
+    case "notionRenamed":
+      return tr("cmd.notion.renamed", { old: r.old, name: r.name });
+    case "notionMoved":
+      return tr("cmd.notion.moved", {
+        name: r.name,
+        due: `${describeDue(r.due_date, { today: tr("date.today"), tomorrow: tr("date.tomorrow") }, now)}${
+          r.due_time ? ` ${r.due_time}` : ""
+        }`,
+      });
     case "notionOff":
       return tr("cmd.notion.off");
     case "notionNotSetUp":

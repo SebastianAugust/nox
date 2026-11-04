@@ -1,7 +1,7 @@
 import { emit } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { addReminder, getSetting } from "./db-helpers";
-import { CAPTURE_TIMEOUT_MS, extractIntent, proposalAsQuickAdd, STEPS_SCHEMA, STEPS_SYSTEM, validateSteps, type Proposal } from "./captureCore";
+import { CAPTURE_TIMEOUT_MS, extractIntent, proposalAsQuickAdd, STEPS_SCHEMA, STEPS_SYSTEM, validateSteps, type Proposal, type TaskProposal } from "./captureCore";
 import { toUtcStamp } from "./commands";
 import { describeDue } from "./commands";
 import { t } from "./i18n";
@@ -26,7 +26,7 @@ export async function propose(text: string): Promise<Proposal> {
 }
 
 /** "Add todo “bayar kos” · tomorrow 07:00?" */
-export function confirmText(p: Exclude<Proposal, { intent: "chat" }>): string {
+export function confirmText(p: TaskProposal): string {
   const when = p.due_date
     ? `${describeDue(p.due_date, { today: t("date.today"), tomorrow: t("date.tomorrow") })}${p.due_time ? ` ${p.due_time}` : ""}`
     : t("cap.noDate");
@@ -34,7 +34,7 @@ export function confirmText(p: Exclude<Proposal, { intent: "chat" }>): string {
 }
 
 /** Create what was confirmed. Returns the plain reply to show. */
-export async function applyProposal(p: Exclude<Proposal, { intent: "chat" }>): Promise<string> {
+export async function applyProposal(p: TaskProposal): Promise<string> {
   if (p.intent === "reminder" && p.due_date && p.due_time) {
     const [y, m, d] = p.due_date.split("-").map(Number);
     const [h, mi] = p.due_time.split(":").map(Number);
@@ -53,7 +53,7 @@ export async function applyProposal(p: Exclude<Proposal, { intent: "chat" }>): P
 }
 
 /** "Edit": open the Todos page with quick-add prefilled. */
-export async function editInTodos(p: Exclude<Proposal, { intent: "chat" }>): Promise<void> {
+export async function editInTodos(p: TaskProposal): Promise<void> {
   await emit("todos:prefill", { text: proposalAsQuickAdd(p) });
   await invoke("show_dashboard");
 }

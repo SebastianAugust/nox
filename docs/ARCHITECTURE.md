@@ -105,6 +105,7 @@ src-tauri/
 | `calendar:sync` | dashboard → pet | "Sync now" / a feed was added or enabled |
 | `calendar:status` | pet or dashboard → all | after a calendar sync or a feed change |
 | `notion:outbox` | any window → all | a Notion write was queued or sent |
+| `backup:status` | Rust or dashboard → all | after a backup or a backup setting change; status is in settings |
 | `todos:changed` | any window → all | after every write in `todoRepo.ts` (the page, Home, `/todo`, `/done`, Telegram) |
 
 `pomodoro:cmd` `start` may carry `minutes` (one session only, `/fokus 5`),
@@ -119,12 +120,20 @@ with that `pomodoro_sessions.todo_id`).
 | `secret_set(name, value)`, `secret_delete(name)` | dashboard | nothing |
 | `secret_exists(name)` | both | `bool`, never the value |
 | `notion_query_database(databaseId)` | pet (sync) | every row: `{ id, archived, properties, lastEditedTime }` |
-| `notion_set_done(pageId, done)` | pet (outbox) | refreshes the page, then sets only its Done checkbox; returns the page; needs `notion_write_enabled` |
+| `notion_set_done(pageId, done, syncedAt?)` | pet (outbox) | reads the page, then sets only its Done checkbox; `{ stale, written, row }`; needs `notion_write_enabled` |
+| `notion_update_assignment(pageId, name?, dateIso?, syncedAt?)` | pet (outbox) | reads the page, then sets only its title and/or date (only what differs); `{ stale, written, row }`; needs `notion_write_enabled` |
 | `notion_create_assignment(databaseId, name, dateIso?, coursePageId?, existingSince?)` | pet (outbox) | `{ pageId, existed }`; with `existingSince` it first looks for a page an earlier attempt made |
 | `weather_geocode(name)` | both | places |
 | `weather_fetch(latitude, longitude)` | both | current + today's forecast |
 | `calendar_feed_set(feedId, url)`, `calendar_feed_delete(feedId)` | dashboard | stores/removes a feed URL in Credential Manager (`calendar_feed_<id>`); https/webcal only; never returned |
 | `calendar_fetch(feedId, daysBack, daysAhead, timeZone?)` | pet | expanded occurrences in the window; https only, redirects only to https, 15 s, 5 MB cap |
+| `google_status()` | both | `{ hasClient, connected }`, never a value |
+| `google_set_client(clientId, clientSecret)`, `google_clear_client()` | dashboard | stores / forgets the OAuth client in Credential Manager (clear disconnects first) |
+| `google_connect()` | dashboard | browser consent with PKCE on a loopback port; `{ canCreate }` |
+| `google_disconnect()` | dashboard | revokes with Google, deletes the refresh token; `{ revoked }` |
+| `google_calendars()` | pet (sync) | `{ id, name, color, primary, canWrite }[]` |
+| `google_sync_events(calendarId, syncToken?, timeMin, timeMax)` | pet (sync) | `{ full, events, nextSyncToken }`; a 410 on the token becomes a full list |
+| `google_create_event(calendarId, event)` | pet (after Confirm) | the created event with `htmlLink`; title, start, end, location only |
 | `location_detect()` | dashboard ("Detect now") | rough city + lat/lon from the public IP (ipapi.co); refuses unless `location_detect_enabled` is `true`; the IP is not returned |
 | `telegram_poll(offset)` | pet | `{ nextOffset, messages, paired }`, paired chat only; a message is `{ kind: "text", text }` or `{ kind: "location", latitude, longitude }` |
 | `telegram_send(text)`, `telegram_typing()` | pet | to the paired chat only, split at 4096 |
@@ -340,29 +349,50 @@ today, open habits, an idle line. No model call. "Start focus" sends
 ## Notion write-back (queue step 01)
 
 Off until Bas turns on **Notion writes** (`notion_write_enabled`, migration
-0006). Exactly two writes exist, both in `src-tauri/src/notion.rs`:
+0006). Exactly three writes exist, all in `src-tauri/src/notion.rs`:
 
-- **Done**: `notion_set_done` reads the page first (so a page edited in
-  Notion since the last sync is current before anything is written, and the
-  Done property must really be a checkbox), then PATCHes a body with one key,
-  the Done checkbox. Nothing else is sent.
+- **Done**: `notion_set_done` reads the page first (the Done property must
+  really be a checkbox), then PATCHes a body with one key, the Done
+  checkbox. Nothing else is sent.
 - **Create**: `notion_create_assignment` POSTs a page with only the title,
-  date and course relation properties. Property names come from the mapping
-  settings (`notion_map_*`, default the template's Name, Date, Courses,
-  Done), are checked, and are the only keys a write body can hold.
+  date and course relation properties.
+- **Update**: `notion_update_assignment` reads the page first (title and date
+  properties must have the title and date types), then PATCHes only the
+  title and/or date, and only the ones that differ from Notion's value.
 
-There is no command or code path that deletes, archives, renames, moves or
-edits anything else, or touches another database. A 403 on a write becomes
-`readOnly` ("enable Update/Insert content"). Ids are 32 hex digits; dates
-are checked before they reach a request.
+Property names come from the mapping settings (`notion_map_*`, default the
+template's Name, Date, Courses, Done), are checked, and are the only keys a
+write body can hold. Grade, Weight, Weighted Mark and the Courses database
+are never written. There is no command or code path that deletes, archives,
+moves or edits anything else, or touches another database. A 403 on a write
+becomes `readOnly` ("enable Update/Insert content"). Ids are 32 hex digits;
+dates and `syncedAt` are checked before they reach a request.
+
+**Conflict rule** (Done and Update). Each queued write keeps the local
+copy's `last_synced_at` from when Bas made the edit (`synced_at` in the
+payload), plus, for updates, the title and date he saw (`base_name`,
+`base_due`). Rust reads the page; if Notion's `last_edited_time` is at or
+after that sync time (rounded down to the minute, Notion's precision),
+nothing is written and the fresh page comes back `stale`. The outbox then
+refreshes the local row from it (`refreshLocal`: same mapping as the sync,
+`last_synced_at` = now) and calls again without `syncedAt`, so the write
+lands on fresh data and other properties are never touched. If the very
+title or date Nox wants to change was also changed in Notion, Notion wins:
+the row becomes `failed` with `{ kind: "conflict", fields }` at once (no
+retries), and Retry on Integrations sends Nox's value anyway (`force`).
 
 **Outbox** (`notion_outbox`, `src/lib/notionOutbox.ts`): every write is a row
-first (`set_done` or `create`, JSON payload, `pending | sent | failed`,
-attempts, last error). The pet window sends pending rows after every sync
-(so on start), and when `notion:outbox` says one was queued. Five failed
-attempts make a row `failed`, shown on Integrations with Retry; a failed Done
-is not reverted locally. While writes are off, rows wait and attempts are not
-counted. A pending Done for the same page is updated, not doubled (Undo).
+first (`set_done`, `create` or `update`, JSON payload, `pending | sent |
+failed`, attempts, last error). The pet window sends pending rows after every
+sync (so on start), and when `notion:outbox` says one was queued. Five failed
+attempts make a row `failed`, shown on Integrations with Retry and on the
+Todos row ("Not saved to Notion"); a failed write is not reverted locally.
+After each sync, `applyOutboxOverlay` puts pending and failed (not
+conflicting) edits back on top of what the sync wrote, so an unsent edit
+never disappears silently. While writes are off, rows wait and attempts are
+not counted. A pending Done for the same page is updated, not doubled (Undo);
+a pending update for the same page is merged (newest title/date, first
+edit's base and sync time).
 
 Creates are not idempotent in Notion. After an attempt that may have reached
 Notion (timeout, offline, bad response, 5xx), the row gets
@@ -373,10 +403,79 @@ created since then before creating one. A sent create is mirrored into
 next sync upserts the same row and the Todos page shows it once.
 
 Where it is used: the checkbox on Notion rows in the Todos page (optimistic,
-with Undo), "Send to Notion" in a todo's details (a linked todo cannot be
-sent twice), and `/tugas tambah <text>` / `/tugas selesai <n>` in the pet chat
-and Telegram (course from `@course`, matched by name against synced courses;
-no match leaves the relation empty and says so).
+with Undo); with writes on, the title and date fields in a Notion row's
+details panel (banner "Synced with Notion" instead of "Read-only"); "Send to
+Notion" in a todo's details (a linked todo cannot be sent twice); and in the
+pet chat and Telegram (shared `commands.ts` / `commandRunner.ts`):
+`/tugas tambah <text>` (course from `@course`, matched by name against synced
+courses; no match leaves the relation empty and says so), `/tugas selesai <n>`,
+`/tugas ubah <n> <new title>` and `/tugas tunda <n> <date>` (date via the todo
+parser, or `YYYY-MM-DD [HH:MM]`). n is from the `/tugas` list. Each replies
+with a one-line summary, or "Notion writes are off".
+
+## Google Calendar (queue step 02, Google delta)
+
+Google Calendar is the main calendar source; the ICS feeds below stay as
+"other calendar feeds". Setup for Bas: `docs/GOOGLE_SETUP.md`.
+
+**OAuth** (`src-tauri/src/google.rs`): Authorization Code + PKCE (S256, a
+64-character verifier) with a random `state`, scopes `calendar.readonly` and
+`calendar.events` only, `access_type=offline` + `prompt=consent`. Connect binds
+`127.0.0.1:0` (a random free port), opens the system browser with
+`rundll32 url.dll,FileProtocolHandler` (no shell), waits up to 5 minutes for
+`GET /?code=…&state=…` (other requests, like a favicon, get a 404 and are
+ignored; a wrong state or `error=` ends the attempt), then exchanges the code
+with the verifier. Client id/secret and the refresh token are Credential
+Manager entries (`google_client_id`, `google_client_secret`,
+`google_refresh_token`) that only `google.rs` can read: the `secret_*`
+commands refuse them and no command returns them. The access token lives in
+memory and is refreshed 60 s before it expires; a 401 drops it and retries
+once (reads only; a create is never re-sent). `invalid_grant` (revoked, or
+the 7-day expiry of an app in Testing) becomes `unauthorized` ("connect
+again"). Disconnect POSTs the refresh token to Google's revoke endpoint
+(best effort), deletes it, and the frontend forgets the Google calendars and
+their events. Granted scopes are checked: without `calendar.events`, events
+cannot be created (`google_can_create` = false, said on Integrations).
+
+**Sync** (`src/lib/googleCalendar.ts`, run with the feeds by
+`syncCalendars` in the pet window: start, every 30 min, `calendar:sync`):
+`calendarList` first into `calendar_sources` (migration 0010; new: primary
+on, others off; calendars no longer listed are removed with their events),
+then per enabled calendar `events.list` with `singleEvents=true`. Without a
+usable sync token (first run, a new local day, a re-enabled calendar) it is
+a full list over yesterday … +30 days that replaces that calendar's rows;
+otherwise incremental with `syncToken` (changed events replace theirs,
+cancelled ones are deleted). A 410 on the token makes Rust fall back to a
+full list in the same call. A failure keeps the rows and sets `last_error`
+(the stale mark). Google rows live in `calendar_events` with `source =
+'google'`, `feed_id` 0, `calendar_id`, `google_id`, `uid` = `google_id`,
+`html_link`. Everything that reads events (`getEvents`: Home, briefing,
+`/jadwal`, nudges) takes enabled feeds and enabled Google calendars alike.
+
+**Creating events**: the only Calendar write, `google_create_event`: summary,
+start, end, optional location, into the primary calendar. Never edits or
+deletes. `/event <text>` (alias `/acara`) is parsed by `eventParse.ts` on top
+of the shared quick-add parser: a time range `14:00-15:30`, a duration
+`~1h` / `~90m`, a place after `di` / `at` (not when what follows is only a
+time), default 1 hour, all-day without a time, today without a date, past
+midnight when the end is earlier. The preview warns about overlapping timed
+events (`overlapping` in `calendarLogic.ts`). After Confirm, the event is
+stored locally at once and the reply includes its link.
+
+**Pending actions** (`pending_actions`, `src/lib/pendingActions.ts` +
+`confirmations.ts`): one confirmation flow for everything created from free
+text, the step 03 capture proposals included (they no longer use an
+in-memory map). Offering stores `{ kind, payload, source, expires_at = now +
+10 min }`; the pet shows the question with Add / Edit / Cancel, Telegram with
+inline buttons `pa:yes:<id>` / `pa:no:<id>` (Rust passes callback queries only
+from the paired private chat, `from_paired_chat`). Confirm claims the row
+atomically (`pending` → `running`, not expired, same source), so it runs at
+most once; then `done` or `failed` with the reply in `result`. Edit (pet)
+cancels it and returns the text: a capture opens Todos prefilled, an event
+goes back into the chat input as its `/event` line.
+
+**Nudges**: `calendar_nudge_minutes` now defaults to 60 (migration 0010 moves
+an untouched 15 to 60), set on Integrations → Google Calendar.
 
 ## Calendar feeds (queue step 02)
 
@@ -400,7 +499,7 @@ broken file is an error, a broken event is skipped, nothing panics.
 `src/lib/calendar.ts` (pet window): sync on start, every 30 minutes and on
 `calendar:sync`; a good fetch replaces that feed's rows in
 `calendar_events`, a failed one keeps them and stores `last_error` (shown as
-"may be out of date"). Event nudges: `calendar_nudge_minutes` (default 15,
+"may be out of date"). Event nudges: `calendar_nudge_minutes` (default 60 since migration 0010,
 0 = off) before each timed event, recorded in `calendar_nudges_sent` before
 delivery (kind `calendar`, held during focus like other non-reminder kinds).
 Home's "Today's schedule" lists today's events (all-day first) with a
@@ -414,12 +513,16 @@ nothing is saved without a confirmation. `src/lib/captureCore.ts` (pure,
 tested) holds the pipeline:
 
 1. **Cheap gate** (`mayBeTask`): only text with a trigger word (ingetin,
-   remind me, tambah, catat, jangan lupa, besok, jam, deadline, …) or a
-   clock time goes to the model. Everything else is plain chat, unslowed.
+   remind me, tambah, catat, jangan lupa, besok, jam, deadline, …; for
+   events rapat, meeting, kelas, class, acara, event, jadwal, kuliah,
+   seminar, …) or a clock time goes to the model; "di / at <place>" counts
+   only next to a weekday or a date (so "lagi di kos" stays chat).
+   Everything else is plain chat, unslowed.
 2. **Model** (`askJson` in `ollama.ts`, through the existing `ollama_chat`
    command): temperature 0, `format` = a JSON schema, 20 s timeout, model
-   from `ollama_model`. It returns `{ intent, title, datePhrase?,
-   timePhrase?, priority?, list?, course? }`.
+   from `ollama_model`. It returns `{ intent: todo | reminder | event | chat,
+   title, datePhrase?, timePhrase?, endTimePhrase?, location?, priority?,
+   list?, course? }`.
 3. **Validation**: exactly that shape, known keys and enums only, length
    caps; anything else counts as a failure.
 4. **Dates**: the phrases must appear in the user's own words, and are
@@ -429,20 +532,90 @@ tested) holds the pipeline:
    an instruction ("ingetin …", "catat …") goes through the deterministic
    parser; anything else is chat.
 
-Confirmation: the pet shows "Add todo “bayar kos” · tomorrow 07:00?" with
+Events: the phrases go through the same parser (the model copies words, it
+never computes a time or date). One rule of our own: for events, a bare
+"jam 1" … "jam 6" (no pagi/siang/sore/malam, no am/pm) is the afternoon
+("rapat jumat jam 2" = 14:00); without a day, the event is today if that
+time is still ahead, else tomorrow. A location or end the user did not
+write is dropped. `proposalToDraft` turns the proposal into the same
+`EventDraft` `/event` uses, so creation is step 02's path
+(`offerEvent` → pending action `event` → `google_create_event`). When
+Google Calendar is not connected, `offerCapture` says so and offers the
+event as a todo instead (`eventAsTodo`, title with the place).
+
+Confirmation (all through `pending_actions`, see Google Calendar above):
+the pet shows "Add todo “bayar kos” · tomorrow 07:00?" with
 Add / Edit / Cancel (Edit opens Todos with quick-add prefilled via
 `todos:prefill`). Telegram replies with a preview and inline Confirm /
 Cancel buttons; Rust passes button presses (`callback_query`) through only
-from the paired private chat and only with data Nox sets (`cap:yes:<n>`);
+from the paired private chat and only with data Nox sets (`pa:yes:<id>`, a pending action; see Google Calendar above);
 `telegram_send_buttons` / `telegram_answer_callback` are the two new
-commands. Previews expire after 15 minutes.
+commands. Previews expire after 10 minutes (pending actions).
 
 "Suggest steps" in a todo's details asks the model for 3-6 steps (JSON
 array, validated), shown as a checklist with Add selected / Add all /
 Dismiss; none is saved on its own. Setting `ai_capture_enabled` (migration
 0008, default on) in Settings → Features.
 
-Evaluation: `src/lib/capture.fixtures.json` (33 phrases, id + en, typos);
-`capture.test.ts` runs them with a mocked model; `npm run eval:capture`
-(`vitest.eval.config.ts`, `capture.eval.ts`) runs them against the real
-local Ollama and prints accuracy per intent.
+Evaluation: `src/lib/capture.fixtures.json` (46 phrases, id + en, typos,
+9 events); `capture.test.ts` and `captureEvent.test.ts` run them with a
+mocked model; `npm run eval:capture [-- --model <name>]`
+(`scripts/eval-capture.mjs` → `vitest.eval.config.ts` → `capture.eval.ts`)
+runs them against the real local Ollama and prints, per intent, intent
+accuracy, intent+fields accuracy and the median model latency (the first
+call, loading the model, is reported apart), plus the CPU and RAM.
+
+## Backups (queue step 04)
+
+All data lives in one SQLite file, `%APPDATA%\com.lenovo.nox\nox.db`.
+Secrets are not in it (Credential Manager), so a backup never holds a token.
+`src-tauri/src/backup.rs` does the work; `src/lib/backupLogic.ts` (pure,
+tested) holds the warning and offer rules.
+
+- **How a copy is made:** always SQLite's own `VACUUM INTO` (the open file is
+  never copied), into `nox-YYYYMMDD-HHMM.db` (`-2`, `-3`, … when the minute
+  repeats). The copy is then opened read-only and checked with
+  `PRAGMA integrity_check`; a copy that is not `ok` is deleted and the backup
+  counts as failed.
+- **Retention:** keep the newest `backup_keep` (default 14, 1-365). Only files
+  named exactly `nox-YYYYMMDD-HHMM[-n].db` in the backup folder are ever
+  deleted; anything else there is left alone.
+- **When:**
+  - the first start of each day, in the background (`last_backup_date`);
+  - at startup, **before** the SQL plugin opens the database, when a migration
+    is pending (`MAX(version)` in `_sqlx_migrations` is below the newest
+    known one). If that backup fails, `run()` registers no migrations, the app
+    runs on the old schema, and `backup_hold` tells Home and Settings why.
+    A fresh install (no file yet) has nothing to back up.
+  - "Back up now" in Settings.
+- **Folder:** `backup_folder`, empty = not chosen yet, which uses
+  `Documents\NoxBackups`. Nothing is picked silently: `backup_detect_folders`
+  finds Google Drive for desktop (`X:\My Drive` / `X:\Drive Saya` on any drive
+  letter, `%USERPROFILE%\My Drive`, `%USERPROFILE%\Google Drive`) and
+  OneDrive (`%OneDrive%`, `%OneDriveConsumer%`, `%OneDriveCommercial%`,
+  `%USERPROFILE%\OneDrive`) and offers each as `<found>\NoxBackups`, on Home
+  once (until a pick or "Not now", `backup_folder_offer_done`) and always in
+  Settings. Drive or OneDrive syncs the folder; Nox uploads nothing.
+  A folder must be an absolute path on a drive that exists, without
+  `<>"|?*`, not inside Nox's own data folder.
+- **Status** in settings: `backup_last_at`, `backup_last_file`,
+  `backup_last_error` (JSON error code, cleared by a success),
+  `backup_last_error_at`. A failure shows a small warning on Home and in
+  Settings until "Hide for today" (`backup_warn_dismissed` = that day).
+  Event `backup:status` (Rust or dashboard → all) after every backup or
+  backup setting change.
+
+Commands: `backup_now(folder?)` → `{ file, size, at, deleted }`;
+`backup_check_folder(folder)`, `backup_default_folder()`,
+`backup_detect_folders()`, `backup_open_folder(folder)` (Explorer),
+`backup_hold()`. Errors are plain codes: `folderInvalid`, `folderCreate`,
+`copy`, `integrity`, `database`.
+
+**Restore (manual, on purpose; there is no in-app restore):**
+
+1. Quit Nox from the tray (closing the dashboard is not enough).
+2. Copy the backup you want into `%APPDATA%\com.lenovo.nox`.
+3. Rename the old `nox.db` (keep it until you are sure), then rename the
+   backup to `nox.db`. Delete any `nox.db-wal` / `nox.db-shm` next to it.
+4. Start Nox. If the backup is older than the app, pending migrations run on
+   it (after a fresh pre-migration backup).

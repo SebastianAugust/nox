@@ -8,8 +8,10 @@ import {
   type AssignmentRow,
 } from "./db-helpers";
 import { completeTodo, createFromQuickAdd, openTodosForCommands } from "./todoRepo";
-import { flushOutbox, queueCreate, queueSetDone, writesEnabled } from "./notionOutbox";
+import { flushOutbox, queueCreate, queueSetDone, queueUpdate, writesEnabled } from "./notionOutbox";
 import { calendarStale, getEvents } from "./calendar";
+import { googleStatus } from "./googleCalendar";
+import { offerEvent } from "./confirmations";
 import { eventsOn, localClock, localDay } from "./calendarLogic";
 import { locale } from "./i18n";
 import { findPlace, toUtcStamp, type Command, type CommandResult, type TaskItem } from "./commands";
@@ -41,7 +43,7 @@ function toTask(a: AssignmentRow, n: number, now: Date): TaskItem {
   };
 }
 
-/** The numbered lists /tugas and /todo list show; /tugas n, /tugas selesai n and /done n index them. */
+/** The numbered lists /tugas and /todo list show; /tugas n, /tugas selesai|ubah|tunda n and /done n index them. */
 const taskRows = (_now: Date) => getOpenAssignments(undefined, TASKS_SHOWN);
 async function taskList(now: Date): Promise<TaskItem[]> {
   return (await taskRows(now)).map((a, i) => toTask(a, i + 1, now));
@@ -83,6 +85,28 @@ export async function runCommand(cmd: Command, channel: Channel, now = new Date(
         await queueSetDone(item.notion_id, true);
         void flushOutbox();
         return { kind: "notionDoneQueued", name: item.name };
+      }
+      case "event": {
+        // Never created here: a pending action waits for Confirm.
+        const status = await googleStatus().catch(() => ({ connected: false }));
+        if (!status.connected) return { kind: "eventNoGoogle" };
+        const offer = await offerEvent(cmd.draft, channel);
+        return { kind: "confirm", actionId: offer.id, text: offer.text };
+      }
+      case "notionEdit":
+      case "notionMove": {
+        if (!(await writesEnabled())) return { kind: "notionOff" };
+        const item = (await taskRows(now))[cmd.n - 1];
+        if (!item) return { kind: "taskMissing", n: cmd.n };
+        const change =
+          cmd.kind === "notionEdit" ? { name: cmd.title } : { due_date: cmd.due_date, due_time: cmd.due_time ?? null };
+        const r = await queueUpdate(item.notion_id, change);
+        if (r === "off") return { kind: "notionOff" };
+        if (r !== "queued") return { kind: "taskMissing", n: cmd.n };
+        void flushOutbox();
+        return cmd.kind === "notionEdit"
+          ? { kind: "notionRenamed", old: item.name, name: cmd.title }
+          : { kind: "notionMoved", name: item.name, due_date: cmd.due_date, due_time: cmd.due_time };
       }
       case "todoAdd": {
         // Same parser and fields as the Todos page; the write announces

@@ -6,12 +6,20 @@
 //! Retry-After. Property mapping happens in TypeScript.
 //!
 //! Write (only while the `notion_write_enabled` setting is "true"), exactly
-//! two operations and nothing else:
+//! three operations and nothing else:
 //!   - set the Done checkbox of an existing assignment page
 //!   - create a page in the assignments database with title, date, course
-//! There is no code path that deletes, archives, renames, moves or edits any
-//! other property or database. Property names come from the mapping
-//! settings, are checked, and are the only keys a write body can contain.
+//!   - update the title and/or date of an existing assignment page
+//! There is no code path that deletes, archives, moves or edits any other
+//! property or database (Grade, Weight, Weighted Mark, Courses are never
+//! written). Property names come from the mapping settings, are checked, and
+//! are the only keys a write body can contain.
+//!
+//! Conflict rule for updates (Done, title, date): the page is always read
+//! first. When the caller passes the local `syncedAt` and the page was edited
+//! in Notion since then, nothing is written and the fresh page comes back as
+//! `stale`; the frontend refreshes its copy and calls again without
+//! `syncedAt` to write on top of the fresh data.
 
 use std::time::{Duration, Instant};
 
@@ -199,26 +207,121 @@ fn valid_date(s: &str) -> bool {
             || (b.len() <= 29 && b[10] == b'T' && s[11..].chars().all(|c| c.is_ascii_digit() || ":+-.Z".contains(c))))
 }
 
-/// Refresh the page, then set only its Done checkbox. Returns the page as
-/// Notion has it afterwards, so the local copy is current.
-async fn set_done_inner(base: &str, token: &str, page_id: &str, done_prop: &str, done: bool) -> Result<NotionRow, ApiError> {
-    // Read first: the page may have changed since the last sync, and the
-    // property must really be a checkbox before anything is written.
+/// What an update did. `stale`: the page changed in Notion since `syncedAt`,
+/// so nothing was written and `row` is the fresh page. Otherwise `row` is
+/// the page as Notion has it afterwards (`written` false when it already had
+/// those values).
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateResult {
+    stale: bool,
+    written: bool,
+    row: NotionRow,
+}
+
+/// Was the page edited at or after the local sync? Notion's
+/// `last_edited_time` has minute precision, so the sync time is rounded down
+/// to its minute: an edit in the same minute counts as newer (one extra
+/// refresh, never a missed edit).
+fn edited_since(last_edited: Option<&str>, synced_at: &str) -> Result<bool, ApiError> {
+    use chrono::{DateTime, Timelike};
+    let synced = DateTime::parse_from_rfc3339(synced_at).map_err(|_| ApiError::Invalid)?;
+    let synced = synced.with_second(0).and_then(|d| d.with_nanosecond(0)).ok_or(ApiError::Invalid)?;
+    // No timestamp from Notion: assume it changed (refresh first).
+    let Some(edited) = last_edited.and_then(|e| DateTime::parse_from_rfc3339(e).ok()) else {
+        return Ok(true);
+    };
+    Ok(edited >= synced)
+}
+
+/// Read the page before any update: it must exist, and with `synced_at`, it
+/// must not have changed in Notion since (else `Ok(Err(fresh row))`).
+async fn read_for_update(base: &str, token: &str, page_id: &str, synced_at: Option<&str>) -> Result<Result<Value, NotionRow>, ApiError> {
     let page = send(base, token, reqwest::Method::GET, &format!("/pages/{page_id}"), None, Kind::Write).await?;
     if page["archived"].as_bool() == Some(true) || page["in_trash"].as_bool() == Some(true) {
         return Err(ApiError::NotFound);
     }
+    if let Some(s) = synced_at {
+        if edited_since(page["last_edited_time"].as_str(), s)? {
+            return Ok(Err(row_of(&page).ok_or(ApiError::BadResponse)?));
+        }
+    }
+    Ok(Ok(page))
+}
+
+async fn patch(base: &str, token: &str, page_id: &str, props: serde_json::Map<String, Value>) -> Result<NotionRow, ApiError> {
+    let body = json!({ "properties": Value::Object(props) });
+    let updated = send(base, token, reqwest::Method::PATCH, &format!("/pages/{page_id}"), Some(&body), Kind::Write).await?;
+    row_of(&updated).ok_or(ApiError::BadResponse)
+}
+
+/// Read the page (conflict rule), then set only its Done checkbox.
+async fn set_done_inner(base: &str, token: &str, page_id: &str, done_prop: &str, done: bool, synced_at: Option<&str>) -> Result<UpdateResult, ApiError> {
+    let page = match read_for_update(base, token, page_id, synced_at).await? {
+        Ok(page) => page,
+        Err(fresh) => return Ok(UpdateResult { stale: true, written: false, row: fresh }),
+    };
+    // The property must really be a checkbox before anything is written.
     if page["properties"][done_prop]["type"].as_str() != Some("checkbox") {
         return Err(ApiError::Invalid);
     }
     if page["properties"][done_prop]["checkbox"].as_bool() == Some(done) {
-        return row_of(&page).ok_or(ApiError::BadResponse); // already so; write nothing
+        // Already so; write nothing.
+        return Ok(UpdateResult { stale: false, written: false, row: row_of(&page).ok_or(ApiError::BadResponse)? });
     }
     let mut props = serde_json::Map::new();
     props.insert(done_prop.to_string(), json!({ "checkbox": done }));
-    let body = json!({ "properties": Value::Object(props) });
-    let updated = send(base, token, reqwest::Method::PATCH, &format!("/pages/{page_id}"), Some(&body), Kind::Write).await?;
-    row_of(&updated).ok_or(ApiError::BadResponse)
+    let row = patch(base, token, page_id, props).await?;
+    Ok(UpdateResult { stale: false, written: true, row })
+}
+
+fn plain_title(prop: &Value) -> String {
+    prop["title"]
+        .as_array()
+        .map(|parts| parts.iter().filter_map(|p| p["plain_text"].as_str().or(p["text"]["content"].as_str())).collect())
+        .unwrap_or_default()
+}
+
+/// Read the page (conflict rule), then set only its title and/or date: the
+/// two keys from the mapping, and only those that differ.
+async fn update_inner(
+    base: &str,
+    token: &str,
+    page_id: &str,
+    props: &WriteProps,
+    name: Option<&str>,
+    date: Option<&str>,
+    synced_at: Option<&str>,
+) -> Result<UpdateResult, ApiError> {
+    let page = match read_for_update(base, token, page_id, synced_at).await? {
+        Ok(page) => page,
+        Err(fresh) => return Ok(UpdateResult { stale: true, written: false, row: fresh }),
+    };
+    let current = &page["properties"];
+    let mut changes = serde_json::Map::new();
+    if let Some(n) = name {
+        if current[&props.title]["type"].as_str() != Some("title") {
+            return Err(ApiError::Invalid);
+        }
+        if plain_title(&current[&props.title]) != n {
+            changes.insert(props.title.clone(), json!({ "title": [{ "text": { "content": n } }] }));
+        }
+    }
+    if let Some(d) = date {
+        if current[&props.date]["type"].as_str() != Some("date") {
+            return Err(ApiError::Invalid);
+        }
+        let now = current[&props.date]["date"]["start"].as_str();
+        let same = now.is_some_and(|s| s == d || s.replace(".000", "") == d);
+        if !same {
+            changes.insert(props.date.clone(), json!({ "date": { "start": d } }));
+        }
+    }
+    if changes.is_empty() {
+        return Ok(UpdateResult { stale: false, written: false, row: row_of(&page).ok_or(ApiError::BadResponse)? });
+    }
+    let row = patch(base, token, page_id, changes).await?;
+    Ok(UpdateResult { stale: false, written: true, row })
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -268,13 +371,50 @@ async fn create_inner(base: &str, token: &str, db_id: &str, props: &WriteProps, 
     Ok(Created { page_id: id.to_string(), existed: false })
 }
 
-/// Set (or clear) the Done checkbox of an assignment page.
+fn check_synced(synced_at: Option<&str>) -> Result<(), ApiError> {
+    match synced_at {
+        Some(s) if chrono::DateTime::parse_from_rfc3339(s).is_err() => Err(ApiError::Invalid),
+        _ => Ok(()),
+    }
+}
+
+/// Set (or clear) the Done checkbox of an assignment page. With `syncedAt`
+/// (the local copy's sync time), a page changed in Notion since then comes
+/// back `stale` and nothing is written.
 #[tauri::command]
-pub async fn notion_set_done(app: AppHandle, page_id: String, done: bool) -> Result<NotionRow, ApiError> {
+pub async fn notion_set_done(app: AppHandle, page_id: String, done: bool, synced_at: Option<String>) -> Result<UpdateResult, ApiError> {
     let id = clean_id(&page_id)?;
+    check_synced(synced_at.as_deref())?;
     let token = writes_enabled(&app).await?;
     let props = write_props(&app).await?;
-    set_done_inner(API, &token, &id, &props.done, done).await
+    set_done_inner(API, &token, &id, &props.done, done, synced_at.as_deref()).await
+}
+
+/// Change the title and/or date of an assignment page; nothing else. Same
+/// `syncedAt` rule as `notion_set_done`.
+#[tauri::command]
+pub async fn notion_update_assignment(
+    app: AppHandle,
+    page_id: String,
+    name: Option<String>,
+    date_iso: Option<String>,
+    synced_at: Option<String>,
+) -> Result<UpdateResult, ApiError> {
+    let id = clean_id(&page_id)?;
+    let name = name.as_deref().map(str::trim);
+    if name.is_some_and(|n| n.is_empty() || n.chars().count() > MAX_NAME) {
+        return Err(ApiError::Invalid);
+    }
+    if date_iso.as_deref().is_some_and(|d| !valid_date(d)) {
+        return Err(ApiError::Invalid);
+    }
+    if name.is_none() && date_iso.is_none() {
+        return Err(ApiError::Invalid);
+    }
+    check_synced(synced_at.as_deref())?;
+    let token = writes_enabled(&app).await?;
+    let props = write_props(&app).await?;
+    update_inner(API, &token, &id, &props, name, date_iso.as_deref(), synced_at.as_deref()).await
 }
 
 /// Create an assignment page: title, optional date, optional course (a
@@ -416,7 +556,7 @@ mod tests {
     #[test]
     fn set_done_reads_first_and_writes_only_the_done_checkbox() {
         let (base, log) = mock(vec![("GET /pages/", 200, page(false)), ("PATCH /pages/", 200, page(true))]);
-        let row = run(set_done_inner(&base, "tok", PAGE, "Done", true)).unwrap();
+        let row = run(set_done_inner(&base, "tok", PAGE, "Done", true, None)).unwrap().row;
         assert_eq!(row.properties["Done"]["checkbox"], json!(true));
         let log = log.lock().unwrap();
         assert!(log[0].starts_with(&format!("GET /pages/{PAGE}")));
@@ -429,7 +569,7 @@ mod tests {
     #[test]
     fn set_done_writes_nothing_when_already_set() {
         let (base, log) = mock(vec![("GET /pages/", 200, page(true))]);
-        run(set_done_inner(&base, "tok", PAGE, "Done", true)).unwrap();
+        run(set_done_inner(&base, "tok", PAGE, "Done", true, None)).unwrap();
         assert_eq!(log.lock().unwrap().len(), 1);
     }
 
@@ -438,14 +578,14 @@ mod tests {
         let mut p: Value = serde_json::from_str(&page(false)).unwrap();
         p["properties"]["Done"] = json!({ "type": "status", "status": { "name": "Done" } });
         let (base, log) = mock(vec![("GET /pages/", 200, p.to_string())]);
-        assert_eq!(run(set_done_inner(&base, "tok", PAGE, "Done", true)), Err(ApiError::Invalid));
+        assert_eq!(run(set_done_inner(&base, "tok", PAGE, "Done", true, None)), Err(ApiError::Invalid));
         assert_eq!(log.lock().unwrap().len(), 1, "no PATCH was sent");
     }
 
     #[test]
     fn maps_a_403_on_write_to_read_only() {
         let (base, _) = mock(vec![("GET /pages/", 403, r#"{"code":"restricted_resource"}"#.into())]);
-        assert_eq!(run(set_done_inner(&base, "tok", PAGE, "Done", true)), Err(ApiError::ReadOnly));
+        assert_eq!(run(set_done_inner(&base, "tok", PAGE, "Done", true, None)), Err(ApiError::ReadOnly));
         let (base, _) = mock(vec![("POST /pages", 403, "{}".into())]);
         let r = run(create_inner(&base, "tok", DB, &props(), NewPage { name: "x", date: None, course_id: None, existing_since: None }));
         assert_eq!(r, Err(ApiError::ReadOnly));
@@ -506,5 +646,131 @@ mod tests {
         .unwrap();
         assert!(!r.existed);
         assert_eq!(log.lock().unwrap().len(), 2);
+    }
+
+    // ── Update (title, date) and the conflict rule ──
+
+    /// An assignment page as Notion returns it, with the properties a write
+    /// must never touch.
+    fn full_page(name: &str, date: &str, edited: &str) -> String {
+        json!({ "id": PAGE, "archived": false, "last_edited_time": edited,
+                "properties": {
+                    "Name": { "type": "title", "title": [{ "plain_text": name, "text": { "content": name } }] },
+                    "Date": { "type": "date", "date": { "start": date } },
+                    "Done": { "type": "checkbox", "checkbox": false },
+                    "Courses": { "type": "relation", "relation": [] },
+                    "Grade": { "type": "number", "number": 90 },
+                    "Weight": { "type": "number", "number": 0.2 },
+                    "Weighted Mark": { "type": "formula", "formula": { "number": 18 } } } })
+        .to_string()
+    }
+
+    fn body_of(entry: &str) -> Value {
+        serde_json::from_str(entry.splitn(3, ' ').nth(2).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn update_writes_only_title_and_date() {
+        let (base, log) = mock(vec![
+            ("GET /pages/", 200, full_page("old", "2026-11-06", "2026-11-04T01:00:00.000Z")),
+            ("PATCH /pages/", 200, full_page("new", "2026-11-07T23:59:00+07:00", "2026-11-04T02:00:00.000Z")),
+        ]);
+        let r = run(update_inner(&base, "tok", PAGE, &props(), Some("new"), Some("2026-11-07T23:59:00+07:00"), None)).unwrap();
+        assert!(r.written && !r.stale);
+        let log = log.lock().unwrap();
+        assert_eq!(log.len(), 2);
+        assert!(log[1].starts_with(&format!("PATCH /pages/{PAGE}")));
+        // The allow-list: Name and Date only, never Grade, Weight, Weighted Mark, Done, Courses.
+        assert_eq!(
+            body_of(&log[1]),
+            json!({ "properties": {
+                "Name": { "title": [{ "text": { "content": "new" } }] },
+                "Date": { "date": { "start": "2026-11-07T23:59:00+07:00" } } } })
+        );
+    }
+
+    #[test]
+    fn update_sends_only_what_changed_and_nothing_when_equal() {
+        let (base, log) = mock(vec![
+            ("GET /pages/", 200, full_page("same", "2026-11-06", "2026-11-04T01:00:00.000Z")),
+            ("PATCH /pages/", 200, full_page("same", "2026-11-08", "2026-11-04T02:00:00.000Z")),
+        ]);
+        run(update_inner(&base, "tok", PAGE, &props(), Some("same"), Some("2026-11-08"), None)).unwrap();
+        assert_eq!(body_of(&log.lock().unwrap()[1]), json!({ "properties": { "Date": { "date": { "start": "2026-11-08" } } } }));
+
+        let (base, log) = mock(vec![("GET /pages/", 200, full_page("same", "2026-11-06T18:30:00.000+07:00", "2026-11-04T01:00:00.000Z"))]);
+        let r = run(update_inner(&base, "tok", PAGE, &props(), Some("same"), Some("2026-11-06T18:30:00+07:00"), None)).unwrap();
+        assert!(!r.written);
+        assert_eq!(log.lock().unwrap().len(), 1, "no PATCH when nothing differs");
+    }
+
+    #[test]
+    fn a_page_edited_since_the_sync_comes_back_stale_and_nothing_is_written() {
+        let (base, log) = mock(vec![
+            ("GET /pages/", 200, full_page("edited in Notion", "2026-11-06", "2026-11-04T10:05:00.000Z")),
+            ("PATCH /pages/", 200, full_page("x", "2026-11-06", "2026-11-04T10:06:00.000Z")),
+        ]);
+        let r = run(update_inner(&base, "tok", PAGE, &props(), Some("new"), None, Some("2026-11-04T10:00:30.000Z"))).unwrap();
+        assert!(r.stale && !r.written);
+        assert_eq!(r.row.properties["Name"]["title"][0]["plain_text"], json!("edited in Notion"));
+        assert_eq!(log.lock().unwrap().len(), 1, "read only");
+        // Done follows the same rule.
+        let (base, log) = mock(vec![("GET /pages/", 200, full_page("x", "2026-11-06", "2026-11-04T10:05:00.000Z"))]);
+        let r = run(set_done_inner(&base, "tok", PAGE, "Done", true, Some("2026-11-04T10:00:00Z"))).unwrap();
+        assert!(r.stale && !r.written);
+        assert_eq!(log.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn an_older_edit_is_not_stale_so_the_write_goes_through() {
+        let (base, log) = mock(vec![
+            ("GET /pages/", 200, full_page("old", "2026-11-06", "2026-11-04T09:00:00.000Z")),
+            ("PATCH /pages/", 200, full_page("new", "2026-11-06", "2026-11-04T10:06:00.000Z")),
+        ]);
+        let r = run(update_inner(&base, "tok", PAGE, &props(), Some("new"), None, Some("2026-11-04T10:00:30.000Z"))).unwrap();
+        assert!(r.written && !r.stale);
+        assert_eq!(log.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn edits_in_the_sync_minute_count_as_newer() {
+        // Notion rounds last_edited_time down to the minute.
+        assert!(edited_since(Some("2026-11-04T10:00:00.000Z"), "2026-11-04T10:00:40.000Z").unwrap());
+        assert!(!edited_since(Some("2026-11-04T09:59:00.000Z"), "2026-11-04T10:00:40.000Z").unwrap());
+        assert!(edited_since(None, "2026-11-04T10:00:40Z").unwrap());
+        assert_eq!(edited_since(Some("2026-11-04T10:00:00Z"), "yesterday"), Err(ApiError::Invalid));
+    }
+
+    #[test]
+    fn update_maps_403_to_read_only_and_refuses_wrong_property_types() {
+        let (base, _) = mock(vec![
+            ("GET /pages/", 200, full_page("old", "2026-11-06", "2026-11-04T01:00:00.000Z")),
+            ("PATCH /pages/", 403, r#"{"code":"restricted_resource"}"#.into()),
+        ]);
+        let r = run(update_inner(&base, "tok", PAGE, &props(), Some("new"), None, None));
+        assert_eq!(r, Err(ApiError::ReadOnly));
+
+        // A mapping that points the date at a non-date property writes nothing.
+        let mut wrong = props();
+        wrong.date = "Grade".into();
+        let (base, log) = mock(vec![("GET /pages/", 200, full_page("old", "2026-11-06", "2026-11-04T01:00:00.000Z"))]);
+        assert_eq!(run(update_inner(&base, "tok", PAGE, &wrong, None, Some("2026-11-08"), None)), Err(ApiError::Invalid));
+        assert_eq!(log.lock().unwrap().len(), 1, "no PATCH was sent");
+    }
+
+    #[test]
+    fn update_refuses_an_archived_page() {
+        let mut p: Value = serde_json::from_str(&full_page("x", "2026-11-06", "2026-11-04T01:00:00.000Z")).unwrap();
+        p["archived"] = json!(true);
+        let (base, log) = mock(vec![("GET /pages/", 200, p.to_string())]);
+        assert_eq!(run(update_inner(&base, "tok", PAGE, &props(), Some("y"), None, None)), Err(ApiError::NotFound));
+        assert_eq!(log.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn validates_synced_at() {
+        assert!(check_synced(None).is_ok());
+        assert!(check_synced(Some("2026-11-04T10:00:00.123Z")).is_ok());
+        assert_eq!(check_synced(Some("2026-11-04 10:00")), Err(ApiError::Invalid));
     }
 }

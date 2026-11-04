@@ -10,6 +10,7 @@ import { NAV_ITEMS } from "../nav";
 import { SettingRow, TextSetting } from "../widgets/SettingControls";
 import { PlacesManager } from "../widgets/Places";
 import { ListsManager } from "../widgets/ListsManager";
+import BackupSettings from "../widgets/BackupSettings";
 
 const TEXT_SETTINGS = [
   { key: "user_name", label: "set.userName" },
@@ -172,6 +173,10 @@ export default function PageSettings() {
       <Card title={t("set.places")}>
         <p className="muted">{t("set.places.hint")}</p>
         <PlacesManager />
+      </Card>
+
+      <Card title={t("backup.title")}>
+        <BackupSettings />
       </Card>
 
       <Card title={t("set.appearance")}>

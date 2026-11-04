@@ -3,7 +3,7 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { getDb, getSettings } from "./db";
 import { setSetting } from "./db-helpers";
 import { asApiError, secretExists, type ApiError } from "./api";
-import { flushOutbox } from "./notionOutbox";
+import { applyOutboxOverlay, flushOutbox } from "./notionOutbox";
 import {
   mapAssignment,
   mapCourse,
@@ -143,6 +143,8 @@ export function syncNotion(): Promise<void> {
       const coursesDb = config.notion_courses_db_id?.trim();
       if (coursesDb) await syncCourses(coursesDb, stamp);
       await syncAssignments(assignmentsDb, stamp, config);
+      // Edits still on their way to Notion (or failed) stay visible locally.
+      await applyOutboxOverlay();
       await setSetting("notion_last_sync_at", stamp.slice(0, 19).replace("T", " "));
     } catch (err) {
       error = err instanceof SyncFailure ? err.detail : { kind: "api", error: asApiError(err), which: "assignments" };

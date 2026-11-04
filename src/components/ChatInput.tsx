@@ -7,10 +7,12 @@ interface ChatInputProps {
   /** The input gained or lost focus (also when the window does). */
   onFocusChange?: (focused: boolean) => void;
   disabled: boolean;
+  /** Text to start with (Edit on a confirmation card). */
+  initialText?: string;
 }
 
-export default function ChatInput({ onSend, onClose, onFocusChange, disabled }: ChatInputProps) {
-  const [value, setValue] = useState("");
+export default function ChatInput({ onSend, onClose, onFocusChange, disabled, initialText }: ChatInputProps) {
+  const [value, setValue] = useState(initialText ?? "");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

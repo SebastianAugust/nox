@@ -1,5 +1,5 @@
 {
-  "_about": "Capture eval phrases. 'expect' is what the pipeline should produce; 'mock' is what an ideal model returns, used by the unit test. Dates: today = 2026-11-04 (Wednesday). due: 'today' | 'tomorrow' | '+N' days | 'YYYY-MM-DD' | null.",
+  "_about": "Capture eval phrases. 'expect' is what the pipeline should produce; 'mock' is what an ideal model returns, used by the unit test. Dates: today = 2026-11-04 (Wednesday). Events also have 'end' (HH:MM) and 'location'. due: 'today' | 'tomorrow' | '+N' days | 'YYYY-MM-DD' | null.",
   "cases": [
     { "text": "ingetin besok jam 7 bayar kos", "expect": { "intent": "reminder", "title": "bayar kos", "due": "tomorrow", "time": "07:00" }, "mock": { "intent": "reminder", "title": "bayar kos", "datePhrase": "besok", "timePhrase": "jam 7" } },
     { "text": "jangan lupa beli galon nanti sore", "expect": { "intent": "todo", "title": "beli galon", "due": null }, "mock": { "intent": "todo", "title": "beli galon" } },
@@ -33,6 +33,19 @@
     { "text": "nanti malem nonton film yuk", "expect": { "intent": "chat" }, "mock": { "intent": "chat" } },
     { "text": "tambah tugas cuci baju, gak urgent", "expect": { "intent": "todo", "title": "cuci baju", "due": null, "priority": 1 }, "mock": { "intent": "todo", "title": "cuci baju", "priority": "low" } },
     { "text": "ingetin hari ini jam 21 kunci pintu", "expect": { "intent": "reminder", "title": "kunci pintu", "due": "today", "time": "21:00" }, "mock": { "intent": "reminder", "title": "kunci pintu", "datePhrase": "hari ini", "timePhrase": "jam 21" } },
-    { "text": "add check the date", "expect": { "intent": "todo", "title": "check the date", "due": null }, "mock": { "intent": "todo", "title": "check the date", "datePhrase": "2026-11-20" }, "_note": "a phrase the user did not write is ignored" }
+    { "text": "add check the date", "expect": { "intent": "todo", "title": "check the date", "due": null }, "mock": { "intent": "todo", "title": "check the date", "datePhrase": "2026-11-20" }, "_note": "a phrase the user did not write is ignored" },
+    { "text": "rapat himatif jumat jam 2 di sekre", "expect": { "intent": "event", "title": "rapat himatif", "due": "+2", "time": "14:00", "location": "sekre" }, "mock": { "intent": "event", "title": "rapat himatif", "datePhrase": "jumat", "timePhrase": "jam 2", "location": "sekre" } },
+    { "text": "kelas pengganti kamis 13:00-14:40 di gk 2", "expect": { "intent": "event", "title": "kelas pengganti", "due": "+1", "time": "13:00", "end": "14:40", "location": "gk 2" }, "mock": { "intent": "event", "title": "kelas pengganti", "datePhrase": "kamis", "timePhrase": "13:00", "endTimePhrase": "14:40", "location": "gk 2" } },
+    { "text": "meeting with pak budi tomorrow at 10am", "expect": { "intent": "event", "title": "meeting with pak budi", "due": "tomorrow", "time": "10:00" }, "mock": { "intent": "event", "title": "meeting with pak budi", "datePhrase": "tomorrow", "timePhrase": "10am" } },
+    { "text": "acara dies natalis sabtu seharian", "expect": { "intent": "event", "title": "dies natalis", "due": "+3" }, "mock": { "intent": "event", "title": "dies natalis", "datePhrase": "sabtu" } },
+    { "text": "jadwal sidang kp senin jam 9 pagi di ruang dosen", "expect": { "intent": "event", "title": "sidang kp", "due": "+5", "time": "09:00", "location": "ruang dosen" }, "mock": { "intent": "event", "title": "sidang kp", "datePhrase": "senin", "timePhrase": "jam 9 pagi", "location": "ruang dosen" } },
+    { "text": "rapt bem besok jam 4 sampe jam 6", "expect": { "intent": "event", "title": "rapt bem", "due": "tomorrow", "time": "16:00", "end": "18:00" }, "mock": { "intent": "event", "title": "rapt bem", "datePhrase": "besok", "timePhrase": "jam 4", "endTimePhrase": "sampe jam 6" } },
+    { "text": "nonton bareng di aula jumat 19:00", "expect": { "intent": "event", "title": "nonton bareng", "due": "+2", "time": "19:00", "location": "aula" }, "mock": { "intent": "event", "title": "nonton bareng", "datePhrase": "jumat", "timePhrase": "19:00", "location": "aula" } },
+    { "text": "webinar ai thursday 3pm", "expect": { "intent": "event", "title": "webinar ai", "due": "+1", "time": "15:00" }, "mock": { "intent": "event", "title": "webinar ai", "datePhrase": "thursday", "timePhrase": "3pm" } },
+    { "text": "kuliah tamu rabu depan jam 10 di auditorium", "expect": { "intent": "event", "title": "kuliah tamu", "due": "+7", "time": "10:00", "location": "auditorium" }, "mock": { "intent": "event", "title": "kuliah tamu", "datePhrase": "rabu depan", "timePhrase": "jam 10", "location": "auditorium" } },
+    { "text": "tadi rapatnya lama banget di sekre", "expect": { "intent": "chat" }, "mock": { "intent": "chat" } },
+    { "text": "kelas tadi seru sih", "expect": { "intent": "chat" }, "mock": { "intent": "chat" } },
+    { "text": "tambahin tgas basdat buat jumat", "expect": { "intent": "todo", "title": "tgas basdat", "due": "+2" }, "mock": { "intent": "todo", "title": "tgas basdat", "datePhrase": "jumat" } },
+    { "text": "remnd me to take meds at 9pm", "expect": { "intent": "reminder", "title": "take meds", "due": "today", "time": "21:00" }, "mock": { "intent": "reminder", "title": "take meds", "timePhrase": "9pm" } }
   ]
 }

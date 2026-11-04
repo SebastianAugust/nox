@@ -2585,3 +2585,108 @@ input.field:focus {
   border-radius: var(--r-control);
   border: 1px dashed var(--line-strong);
 }
+
+/* ── Backup (queue 04) ── */
+
+/* A setting whose control needs the full width (the folder path). */
+.setting--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.setting--stack .field {
+  inline-size: 100%;
+}
+
+.backup-found {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.backup-found__item {
+  display: inline-flex;
+  gap: var(--sp-2);
+  max-inline-size: 100%;
+  padding: var(--sp-2) var(--sp-5);
+  border: 2px solid var(--line-strong);
+  border-radius: var(--r-small);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.backup-found__item[aria-pressed="true"] {
+  border-color: var(--warn-text);
+}
+
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+.backup-restore {
+  padding-top: var(--sp-4);
+}
+
+.backup-notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+/* Small and non-blocking: one line, a quiet way to hide it. */
+.backup-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-4) var(--sp-6);
+  padding: var(--sp-5) var(--sp-7);
+  border: 2px solid var(--line-strong);
+  border-radius: var(--r-small);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.backup-notice--warn {
+  border-color: var(--warn);
+}
+
+.backup-notice--warn > .ti {
+  color: var(--warn-text);
+}
+
+.backup-notice__text {
+  flex: 1 1 260px;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.backup-notice__text p {
+  margin: 0;
+}
+
+.backup-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+/* Google Calendar: the calendar's own color, as a small dot before its name. */
+.g-dot {
+  display: inline-block;
+  inline-size: 10px;
+  block-size: 10px;
+  margin-inline-end: var(--sp-3);
+  border-radius: 50%;
+  vertical-align: middle;
+}

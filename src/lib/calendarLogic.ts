@@ -14,6 +14,11 @@ export type CalendarEvent = {
   all_day: number;
   title: string;
   location: string | null;
+  /** "ics" (a feed) or "google". */
+  source?: string;
+  calendar_id?: string | null;
+  google_id?: string | null;
+  html_link?: string | null;
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -84,4 +89,22 @@ export function dueEventNudges(events: CalendarEvent[], sent: Set<string>, now: 
       return s > t && s <= until && !sent.has(nudgeKey(e));
     }),
   );
+}
+
+/**
+ * Timed events that overlap [startUtc, endUtc) (UTC stamps). A new all-day
+ * event (dates) overlaps the timed events on those days. Existing all-day
+ * events never count: they rarely block time.
+ */
+export function overlapping(events: CalendarEvent[], startUtc: string, endUtc: string, allDay = false): CalendarEvent[] {
+  if (allDay) {
+    const days: string[] = [];
+    for (let d = startUtc; d < endUtc; ) {
+      days.push(d);
+      const [y, m, dd] = d.split("-").map(Number);
+      d = localDay(new Date(y, m - 1, dd + 1));
+    }
+    return sortDay(events.filter((e) => !e.all_day && days.some((day) => onDay(e, day))));
+  }
+  return sortDay(events.filter((e) => !e.all_day && e.start < endUtc && e.end > startUtc));
 }

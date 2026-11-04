@@ -1,6 +1,7 @@
 mod backup;
 mod calendar;
 mod db;
+mod google;
 mod http;
 mod notion;
 mod ollama;
@@ -201,6 +202,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0009_backup.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 10,
+            description: "google calendar and pending actions",
+            sql: include_str!("../migrations/0010_google_calendar.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -215,7 +222,8 @@ pub fn run() {
         backup::Startup::Hold(e) => Some(e),
     };
     let pending = if held.is_some() { Vec::new() } else { migrations() };
-    let hold_state = backup::BackupHold(Mutex::new(held.clone()));
+    let daily_backup = held.is_none();
+    let hold_state = backup::BackupHold(Mutex::new(held));
 
     tauri::Builder::default()
         // First, so a second launch exits before building anything; it only
@@ -237,7 +245,7 @@ pub fn run() {
                 .add_migrations("sqlite:nox.db", pending)
                 .build(),
         )
-        .setup(|app| {
+        .setup(move |app| {
             // The pet starts hidden (tauri.conf.json) and is shown once
             // placed, unless the user had hidden it.
             if let Some(window) = app.get_webview_window("main") {
@@ -250,7 +258,7 @@ pub fn run() {
 
             sync_autostart(app.handle());
             // The daily backup (first start of the day), in the background.
-            if held.is_none() {
+            if daily_backup {
                 backup::start_daily(app.handle());
             }
             // The dashboard announces every settings write.
@@ -328,6 +336,7 @@ pub fn run() {
             notion::notion_query_database,
             notion::notion_set_done,
             notion::notion_create_assignment,
+            notion::notion_update_assignment,
             weather::weather_geocode,
             weather::weather_fetch,
             weather::location_detect,
@@ -335,10 +344,19 @@ pub fn run() {
             backup::backup_now,
             backup::backup_check_folder,
             backup::backup_default_folder,
+            backup::backup_detect_folders,
             backup::backup_open_folder,
             backup::backup_hold,
             calendar::calendar_feed_delete,
             calendar::calendar_fetch,
+            google::google_status,
+            google::google_set_client,
+            google::google_clear_client,
+            google::google_connect,
+            google::google_disconnect,
+            google::google_calendars,
+            google::google_sync_events,
+            google::google_create_event,
             telegram::telegram_poll,
             telegram::telegram_pairing_start,
             telegram::telegram_send,

@@ -8,7 +8,9 @@ import { runCommand } from "./commandRunner";
 import { t } from "./i18n";
 import { chat, HISTORY_LIMIT, type ChatMessage } from "./ollama";
 import { addPlace } from "./places";
-import { applyProposal, captureEnabled, confirmText, propose } from "./capture";
+import { captureEnabled, propose } from "./capture";
+import { cancelOffer, confirmAction, offerCapture, type Offer } from "./confirmations";
+import { buttonData, parseButton } from "./pendingActions";
 import { mayBeTask, type Proposal } from "./captureCore";
 import { getWeather, weatherLine } from "./weather";
 
@@ -98,33 +100,25 @@ type Incoming =
   | { kind: "location"; latitude: number; longitude: number }
   | { kind: "callback"; id: string; data: string };
 
-// Capture previews waiting for Confirm / Cancel (button data "cap:yes:<n>").
-const PROPOSAL_TTL_MS = 15 * 60 * 1000;
-const proposals = new Map<number, { p: Exclude<Proposal, { intent: "chat" }>; at: number }>();
-let nextProposal = 1;
-
-async function offerProposal(p: Exclude<Proposal, { intent: "chat" }>): Promise<void> {
-  const id = nextProposal++;
-  proposals.set(id, { p, at: Date.now() });
+// Confirm / Cancel for anything created from free text (a capture proposal,
+// an /event): the shared pending actions (confirmations.ts). Rust passes
+// button presses through from the paired private chat only.
+async function askWithButtons(offer: Offer): Promise<void> {
   await invoke("telegram_send_buttons", {
-    text: confirmText(p),
+    text: offer.text,
     buttons: [
-      { label: t("cap.confirm"), data: `cap:yes:${id}` },
-      { label: t("todo.cancel"), data: `cap:no:${id}` },
+      { label: t("cap.confirm"), data: buttonData(offer.id, true) },
+      { label: t("todo.cancel"), data: buttonData(offer.id, false) },
     ],
   });
 }
 
 async function handleCallback(id: string, data: string): Promise<void> {
-  const m = /^cap:(yes|no):(d+)$/.exec(data);
   await invoke("telegram_answer_callback", { callbackId: id, text: null }).catch(() => {});
-  if (!m) return;
-  const key = Number(m[2]);
-  const entry = proposals.get(key);
-  proposals.delete(key);
-  if (!entry || Date.now() - entry.at > PROPOSAL_TTL_MS) return send(t("cap.expired"));
-  if (m[1] === "no") return send(t("cap.cancelled"));
-  await send(await applyProposal(entry.p));
+  const b = parseButton(data);
+  // Old buttons (before pending actions) or unknown data: say it expired.
+  if (!b) return send(t("act.expired"));
+  await send(b.yes ? await confirmAction(b.id, "telegram") : await cancelOffer(b.id, "telegram"));
 }
 
 // A location pin waiting for its name. Only the paired chat reaches here
@@ -155,11 +149,12 @@ async function handleMessage(msg: Incoming): Promise<void> {
     if (mayBeTask(text) && (await captureEnabled())) {
       void invoke("telegram_typing").catch(() => {});
       const p = await propose(text).catch(() => ({ intent: "chat" }) as Proposal);
-      if (p.intent !== "chat") return offerProposal(p);
+      if (p.intent !== "chat") return askWithButtons(await offerCapture(p, "telegram"));
     }
     return answerChat(text);
   }
   const result = await runCommand(cmd, "telegram");
+  if (result.kind === "confirm") return askWithButtons({ id: result.actionId, text: result.text });
   await send(renderResult(result, t));
 }
 

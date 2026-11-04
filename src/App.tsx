@@ -18,7 +18,8 @@ import { startBriefingScheduler } from "./lib/briefingScheduler";
 import { startNudgeScheduler } from "./lib/nudgeScheduler";
 import { pushTelegram, startTelegram } from "./lib/telegram";
 import { startCalendar } from "./lib/calendar";
-import { applyProposal, captureEnabled, confirmText, editInTodos, propose } from "./lib/capture";
+import { captureEnabled, propose } from "./lib/capture";
+import { cancelOffer, confirmAction, editOffer, offerCapture, type Offer } from "./lib/confirmations";
 import { mayBeTask, type Proposal } from "./lib/captureCore";
 import { localClock } from "./lib/calendarLogic";
 import { useAppearance } from "./lib/theme";
@@ -78,9 +79,11 @@ function App() {
   // The bubble text that offers Start focus / Later; actions show only while
   // the bubble still says exactly that.
   const [actionsFor, setActionsFor] = useState<string | null>(null);
-  // A capture proposal waiting for Add / Edit / Cancel, and its bubble text.
-  const [proposal, setProposal] = useState<Proposal | null>(null);
-  const [proposalText, setProposalText] = useState<string | null>(null);
+  // A pending action (capture proposal or /event) waiting for Add / Edit /
+  // Cancel; the card shows while the bubble still says its question.
+  const [offer, setOffer] = useState<Offer | null>(null);
+  // Text for the chat input when it opens (Edit on an /event card).
+  const [prefill, setPrefill] = useState<string | undefined>(undefined);
   // What that bubble's "Start focus" is about (a deadline nudge's assignment).
   const focusContextRef = useRef<string | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
@@ -467,6 +470,13 @@ function App() {
     if (!cmd) return false;
     const result = await runCommand(cmd, "pet");
 
+    if (result.kind === "confirm") {
+      // Nothing is created yet: show the question with Add / Edit / Cancel.
+      setOffer({ id: result.actionId, text: result.text });
+      setBubbleText(result.text);
+      setOpen(false);
+      return true;
+    }
     if (result.kind === "dashboard") {
       // The pet hides itself while the dashboard is open.
       invoke("show_dashboard").catch(console.error);
@@ -495,11 +505,10 @@ function App() {
       setOpen(false);
       const p = await propose(text).catch(() => ({ intent: "chat" }) as Proposal);
       if (p.intent !== "chat") {
-        const ask = confirmText(p);
+        const o = await offerCapture(p, "pet");
         setPetState(ambientState());
-        setProposal(p);
-        setProposalText(ask);
-        setBubbleText(ask);
+        setOffer(o);
+        setBubbleText(o.text);
         return;
       }
     }
@@ -557,14 +566,15 @@ function App() {
     );
   };
 
-  // Capture confirmation: nothing is created before Add.
-  const confirmProposal = async () => {
+  // Confirmation card (capture or /event): nothing is created before Add.
+  const confirmOffer = async () => {
     touch();
-    const p = proposal;
-    setProposal(null);
-    if (!p || p.intent === "chat") return;
+    const o = offer;
+    setOffer(null);
+    if (!o) return;
+    setBubbleText(t("pet.thinking"));
     try {
-      setBubbleText(await applyProposal(p));
+      setBubbleText(await confirmAction(o.id, "pet"));
       flashState("excited");
     } catch (err) {
       console.error(err);
@@ -572,16 +582,23 @@ function App() {
     }
     scheduleRevert();
   };
-  const editProposal = async () => {
+  const editOfferNow = async () => {
     touch();
-    const p = proposal;
-    setProposal(null);
-    if (p && p.intent !== "chat") await editInTodos(p).catch(console.error);
+    const o = offer;
+    setOffer(null);
+    if (!o) return;
+    const { prefill: text } = await editOffer(o.id, "pet").catch(() => ({ prefill: null }));
+    // An /event comes back to the chat input to be changed and sent again.
+    if (text) {
+      setPrefill(text);
+      setOpen(true);
+    }
   };
-  const cancelProposal = () => {
+  const cancelOfferNow = async () => {
     touch();
-    setProposal(null);
-    setBubbleText(t("cap.cancelled"));
+    const o = offer;
+    setOffer(null);
+    setBubbleText(o ? await cancelOffer(o.id, "pet").catch(() => t("cap.cancelled")) : t("cap.cancelled"));
     scheduleRevert();
   };
 
@@ -603,15 +620,15 @@ function App() {
         isStreaming={isStreaming}
         onStop={handleStop}
         actions={
-          proposal && proposalText === bubbleText ? (
+          offer && offer.text === bubbleText ? (
             <>
-              <ChunkyButton size="sm" onClick={() => void confirmProposal()}>
+              <ChunkyButton size="sm" onClick={() => void confirmOffer()}>
                 {t("cap.add")}
               </ChunkyButton>
-              <ChunkyButton size="sm" variant="secondary" onClick={() => void editProposal()}>
+              <ChunkyButton size="sm" variant="secondary" onClick={() => void editOfferNow()}>
                 {t("cap.edit")}
               </ChunkyButton>
-              <ChunkyButton size="sm" variant="quiet" onClick={cancelProposal}>
+              <ChunkyButton size="sm" variant="quiet" onClick={() => void cancelOfferNow()}>
                 {t("todo.cancel")}
               </ChunkyButton>
             </>
@@ -629,8 +646,15 @@ function App() {
       />
       {chatOpen && (
         <ChatInput
-          onSend={handleSend}
-          onClose={() => setOpen(false)}
+          onSend={(text) => {
+            setPrefill(undefined);
+            return handleSend(text);
+          }}
+          onClose={() => {
+            setPrefill(undefined);
+            setOpen(false);
+          }}
+          initialText={prefill}
           onFocusChange={(focused) => deliveryStateChanged({ chatFocused: focused })}
           disabled={isStreaming}
         />

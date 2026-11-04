@@ -24,11 +24,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Ollama (plain HTTP) plus Notion, Open-Meteo and Telegram over HTTPS. TLS is
 # Windows' own Schannel (native-tls), so no extra build tools are needed.
-reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "query"] }
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "query", "form"] }
 # API tokens live in Windows Credential Manager, never in the database.
 keyring = { version = "3", features = ["windows-native"] }
-tokio = { version = "1", features = ["time", "sync"] }
+tokio = { version = "1", features = ["time", "sync", "net", "io-util"] }
 getrandom = "0.3"
+# Google OAuth (PKCE): SHA-256 of the verifier, base64url without padding.
+sha2 = "0.10"
+base64 = "0.22"
 # Calendar feeds (read-only): ICS parsing, RRULE expansion, time zones.
 icalendar = { version = "0.17", default-features = false, features = ["parser"] }
 rrule = "0.14"

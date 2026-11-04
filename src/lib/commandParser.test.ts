@@ -209,6 +209,38 @@ describe("/tugas tambah and /tugas selesai (Notion write-back)", () => {
   });
 });
 
+describe("/tugas ubah and /tugas tunda (Notion write-back)", () => {
+  it("parses ubah <n> <new title>", () => {
+    expect(parseCommand("/tugas ubah 2 laporan akhir", NOW)).toEqual({ kind: "notionEdit", n: 2, title: "laporan akhir" });
+    expect(parseCommand("/tasks rename 1 Essay", NOW)).toEqual({ kind: "notionEdit", n: 1, title: "Essay" });
+    for (const bad of ["/tugas ubah", "/tugas ubah 2", "/tugas ubah laporan", "/tugas ubah 0 x"]) {
+      expect(parseCommand(bad, NOW)).toEqual({ kind: "error", error: "notionEditEmpty" });
+    }
+  });
+
+  it("parses tunda <n> <date> with the shared date parser or an ISO date", () => {
+    expect(parseCommand("/tugas tunda 2 jumat", NOW)).toEqual({ kind: "notionMove", n: 2, due_date: "2026-06-12" });
+    expect(parseCommand("/tugas tunda 1 2026-11-20 23:59", NOW)).toEqual({
+      kind: "notionMove",
+      n: 1,
+      due_date: "2026-11-20",
+      due_time: "23:59",
+    });
+    expect(parseCommand("/tasks move 3 2026-11-20", NOW)).toEqual({ kind: "notionMove", n: 3, due_date: "2026-11-20" });
+    for (const bad of ["/tugas tunda 2", "/tugas tunda jumat", "/tugas tunda 2 nanti saja", "/tugas tunda 2 2026-02-30"]) {
+      expect(parseCommand(bad, NOW)).toEqual({ kind: "error", error: "notionMoveDate" });
+    }
+  });
+
+  it("renders short summaries, and the writes-off reply", () => {
+    expect(renderResult({ kind: "notionRenamed", old: "a", name: "b" }, tr)).toBe('cmd.notion.renamed {"old":"a","name":"b"}');
+    expect(renderResult({ kind: "notionMoved", name: "a", due_date: "2026-06-11", due_time: "08:00" }, tr, NOW)).toBe(
+      'cmd.notion.moved {"name":"a","due":"date.tomorrow 08:00"}',
+    );
+    expect(renderResult({ kind: "notionOff" }, tr)).toBe("cmd.notion.off");
+  });
+});
+
 describe("/jadwal", () => {
   it("reads today, tomorrow and the next 7 days", () => {
     expect(parseCommand("/jadwal", NOW)).toEqual({ kind: "schedule", range: "today" });
