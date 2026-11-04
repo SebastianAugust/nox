@@ -77,6 +77,8 @@ export type BriefingData = {
   dateLabel: string;
   /** One rendered weather line, or null when no weather is known. */
   weather: string | null;
+  /** Today's calendar events ("08:00–10:00" or "all day" as detail). */
+  events: BriefingItem[];
   deadlinesToday: BriefingItem[];
   overdue: BriefingItem[];
   todosToday: BriefingItem[];
@@ -98,6 +100,7 @@ export function renderBriefing(data: BriefingData, opener: string, tr: Translate
   const lines = [opener, data.dateLabel];
   if (data.weather) lines.push(data.weather);
   const body = [
+    ...section(tr, "brief.events", data.events),
     ...section(tr, "brief.deadlines", data.deadlinesToday),
     ...section(tr, "brief.overdue", data.overdue),
     ...section(tr, "brief.todos", data.todosToday),

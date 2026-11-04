@@ -113,12 +113,41 @@ html[data-animations="off"] .night-sky .nox-anim {
   animation: nox-bob 4s ease-in-out infinite;
 }
 
+/* Todos: the undo toast rises in; loading rows pulse softly. */
+@keyframes nox-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes nox-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+html[data-animations="off"] .toast-stack,
+html[data-animations="off"] .skeleton {
+  animation: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .nox-anim,
   .nox-anim *,
   .nox-bob,
   .slit-eye,
-  .halo {
+  .halo,
+  .toast-stack,
+  .skeleton {
     animation: none !important;
     transition: none !important;
   }

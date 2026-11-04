@@ -12,6 +12,8 @@ import { PlaceSelect } from "../widgets/Places";
 import { ChunkyButton, Tag, Toggle, type TagTone } from "../../components/ui/controls";
 import { SettingRow, TextSetting } from "../widgets/SettingControls";
 import { SecretField } from "../widgets/SecretField";
+import { flushOutbox, outboxStatus, retryOutbox, type OutboxRow } from "../../lib/notionOutbox";
+import { addFeed, getFeeds, MAX_FEEDS, removeFeed, setFeedEnabled, type CalendarFeed } from "../../lib/calendar";
 
 const PAIR_MINUTES = 10;
 
@@ -225,6 +227,7 @@ function NotionCard() {
           {t(syncing ? "int.notion.syncing" : "int.notion.sync")}
         </ChunkyButton>
       </div>
+      <NotionWrites configured={configured} />
     </ServiceCard>
   );
 }
@@ -424,6 +427,7 @@ export default function PageIntegrations() {
         <BriefingCard />
         <TelegramCard />
         <WeatherCard />
+        <CalendarsCard />
       </div>
       <div className="service-grid">
         {PLANNED.map((s) => (
@@ -437,5 +441,190 @@ export default function PageIntegrations() {
         ))}
       </div>
     </>
+  );
+}
+
+/**
+ * The opt-in for Notion writes (Done checkbox and new assignments only) and
+ * what the outbox holds: pending writes, and failed ones with Retry.
+ */
+function NotionWrites({ configured }: { configured: boolean }) {
+  const { values, save } = useSettingValues(["notion_write_enabled"], ["notion:outbox"]);
+  const [status, setStatus] = useState<{ pending: number; failed: (OutboxRow & { title: string })[] }>({ pending: 0, failed: [] });
+
+  useEffect(() => {
+    const load = () => void outboxStatus().then(setStatus).catch(console.error);
+    load();
+    const unlisteners = ["notion:outbox", "notion:status", "todos:changed"].map((e) => listen(e, load));
+    return () => {
+      for (const u of unlisteners) u.then((off) => off()).catch(console.error);
+    };
+  }, []);
+
+  if (!values) return null;
+  const on = values.notion_write_enabled === "true";
+  return (
+    <>
+      <SettingRow label={t("int.notion.write")} hint={t("int.notion.writeHint")}>
+        <Toggle
+          label={t("int.notion.write")}
+          on={on}
+          disabled={!configured && !on}
+          onChange={(v) => void save("notion_write_enabled", String(v)).then(() => v && void flushOutbox())}
+        />
+      </SettingRow>
+      {(status.pending > 0 || status.failed.length > 0) && (
+        <div className="sync-row">
+          <div className="sync-row__text">
+            {status.pending > 0 && <span>{t(on ? "int.notion.outboxPending" : "int.notion.outboxHeld", { n: status.pending })}</span>}
+            {status.failed.map((f) => (
+              <p key={f.id} className="field-error" role="alert">
+                {t(f.op === "create" ? "int.notion.failedCreate" : "int.notion.failedDone", { title: f.title })}{" "}
+                {f.last_error ? apiErrorText(JSON.parse(f.last_error), "notion") : ""}{" "}
+                <button type="button" className="link-btn" onClick={() => void retryOutbox(f.id).then(() => flushOutbox())}>
+                  {t("int.notion.retry")}
+                </button>
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Calendars (ICS feeds, read-only) ──
+
+function CalendarsCard() {
+  const { values, save } = useSettingValues(["calendar_nudge_minutes"]);
+  const [feeds, setFeeds] = useState<CalendarFeed[]>([]);
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState<number | null>(null);
+
+  const load = useCallback(() => void getFeeds().then(setFeeds).catch(console.error), []);
+  useEffect(() => {
+    load();
+    const unlisten = listen("calendar:status", load);
+    return () => {
+      unlisten.then((off) => off()).catch(console.error);
+    };
+  }, [load]);
+
+  const add = async () => {
+    setBusy(true);
+    setError(null);
+    const r = await addFeed(name, url).catch(() => "invalid" as const);
+    setBusy(false);
+    if (r === "added") {
+      setName("");
+      setUrl(""); // the URL is in Credential Manager now; never shown again
+      load();
+    } else setError(t(r === "full" ? "cal.full" : "cal.badUrl", { n: MAX_FEEDS }));
+  };
+
+  if (!values) return null;
+  const any = feeds.some((f) => f.enabled);
+  const failing = feeds.some((f) => f.enabled && f.last_error);
+  const status = failing
+    ? { tone: "warn" as const, label: "int.attention" as const }
+    : any
+      ? { tone: "done" as const, label: "int.connected" as const }
+      : { tone: "neutral" as const, label: "int.notConnected" as const };
+
+  return (
+    <ServiceCard icon="ti-calendar-event" name={t("cal.title")} status={status} about="cal.about">
+      <ul className="lists">
+        {feeds.map((f) => (
+          <li key={f.id} className="feed">
+            <div className="feed__text">
+              <span className="feed__name">{f.name}</span>
+              <span className="muted">
+                {f.last_synced_at ? t("int.notion.lastSync", { time: localTime(f.last_synced_at) }) : t("int.notion.never")} ·{" "}
+                {t("cal.count", { n: f.events })}
+              </span>
+              {f.last_error && (
+                <span className="field-error">
+                  {t("cal.failed")} {apiErrorText(JSON.parse(f.last_error), "weather")}
+                </span>
+              )}
+            </div>
+            <Toggle label={t("cal.enabled", { name: f.name })} on={!!f.enabled} onChange={(on) => void setFeedEnabled(f.id, on).then(load)} />
+            {confirm === f.id ? (
+              <span className="lists__confirm">
+                <ChunkyButton size="sm" variant="danger" onClick={() => void removeFeed(f.id).then(() => (setConfirm(null), load()))}>
+                  {t("cal.remove")}
+                </ChunkyButton>
+                <ChunkyButton size="sm" variant="secondary" onClick={() => setConfirm(null)}>
+                  {t("todo.cancel")}
+                </ChunkyButton>
+              </span>
+            ) : (
+              <ChunkyButton size="sm" variant="secondary" onClick={() => setConfirm(f.id)}>
+                {t("cal.remove")}
+              </ChunkyButton>
+            )}
+          </li>
+        ))}
+      </ul>
+      {feeds.length < MAX_FEEDS && (
+        <form
+          className="feed-add"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void add();
+          }}
+        >
+          <label htmlFor="cal-name" className="sr-only">
+            {t("cal.name")}
+          </label>
+          <input id="cal-name" className="field field--short" placeholder={t("cal.name")} maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
+          <label htmlFor="cal-url" className="sr-only">
+            {t("cal.url")}
+          </label>
+          <input
+            id="cal-url"
+            type="password"
+            className="field"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={t("cal.url")}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          <ChunkyButton type="submit" size="sm" disabled={busy || !name.trim() || !url.trim()}>
+            {t("cal.add")}
+          </ChunkyButton>
+        </form>
+      )}
+      <p className="muted">{t("cal.urlHint")}</p>
+      {error && (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      )}
+      <SettingRow label={t("cal.nudge")} hint={t("cal.nudgeHint")} htmlFor="cal-nudge">
+        <select
+          id="cal-nudge"
+          className="field field--select field--short"
+          value={values.calendar_nudge_minutes ?? "15"}
+          onChange={(e) => void save("calendar_nudge_minutes", e.target.value)}
+        >
+          {["0", "5", "10", "15", "30", "60"].map((m) => (
+            <option key={m} value={m}>
+              {m === "0" ? t("cal.nudgeOff") : t("set.minutes", { n: m })}
+            </option>
+          ))}
+        </select>
+      </SettingRow>
+      <div className="sync-row">
+        <span className="muted">{t("cal.window")}</span>
+        <ChunkyButton size="sm" disabled={!any} onClick={() => emit("calendar:sync").catch(console.error)}>
+          {t("int.notion.sync")}
+        </ChunkyButton>
+      </div>
+    </ServiceCard>
   );
 }

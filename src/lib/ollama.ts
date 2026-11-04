@@ -148,6 +148,59 @@ type OllamaEvent =
 let nextRequestId = 1;
 
 /**
+ * One structured answer from the local model: temperature 0, `format` set
+ * to a JSON schema, a hard timeout. Resolves the parsed JSON content, or
+ * rejects (Ollama off, model missing, timeout, not JSON). For capture and
+ * step suggestions; the caller validates the shape.
+ */
+export async function askJson(system: string, user: string, schema: object, timeoutMs: number): Promise<unknown> {
+  const s = await getSettings(["ollama_model"]).catch(() => ({}) as Record<string, string>);
+  const requestId = nextRequestId++;
+  const body = {
+    model: s.ollama_model?.trim() || DEFAULT_MODEL,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    stream: false,
+    format: schema,
+    keep_alive: KEEP_ALIVE,
+    options: { temperature: 0, num_predict: 300 },
+  };
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const finish = (fn: () => void) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      fn();
+    };
+    const timer = setTimeout(() => {
+      invoke("ollama_cancel", { requestId }).catch(() => {});
+      finish(() => reject(new Error("timeout")));
+    }, timeoutMs);
+    let text = "";
+    const channel = new Channel<OllamaEvent>();
+    channel.onmessage = (event) => {
+      if (event.kind === "line") text += event.text;
+      else if (event.kind === "httpError") finish(() => reject(new Error(`http ${event.status}`)));
+      else if (event.kind === "unreachable") finish(() => reject(new Error("unreachable")));
+      else
+        finish(() => {
+          try {
+            const data = JSON.parse(text.trim());
+            if (data.error) throw new Error(String(data.error));
+            resolve(JSON.parse(data.message?.content ?? ""));
+          } catch (err) {
+            reject(err);
+          }
+        });
+    };
+    invoke("ollama_chat", { requestId, body, onEvent: channel }).catch((err) => finish(() => reject(err)));
+  });
+}
+
+/**
  * One short reply with a hard deadline, or null (Ollama off, slow, cut off or
  * failing). Used for the briefing's friendly opener; callers always have a
  * static fallback, so nothing depends on the model.

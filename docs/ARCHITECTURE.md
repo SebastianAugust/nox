@@ -43,7 +43,8 @@ src/
     nav.ts                 page order = 1-7 shortcuts
     format.ts              due-date wording, rich-text template fill
     pages/                 one file per page (Integrations = Notion, briefing, Telegram, weather)
-    widgets/               TodoItem, AddTodo, WeekFootprints, HabitItem, Reminders, SettingControls, SecretField
+    todos/                 the Todos page parts: QuickAdd, TodoRow, DetailsPanel, BulkBar, Toasts, format
+    widgets/               TodoItem, AddTodo, WeekFootprints, HabitItem, Reminders, SettingControls, SecretField, Places, ListsManager
   lib/
     db.ts, db-helpers.ts   all SQL
     i18n.ts                en + id strings, t(), useLanguage()
@@ -60,6 +61,10 @@ src/
     nudgeScheduler.ts, briefingScheduler.ts   pet-window schedulers
     weather.ts             Open-Meteo reading for the active place, 30 min cache, wording
     places.ts              saved places, active place, seeding, Detect now
+    todoParse.ts           quick-add parser for todos, also /todo (pure, tested)
+    todoLogic.ts           todo views, counts, grouping, sort, search, repeat (pure, tested)
+    todoRepo.ts            every todo read/write: lists, steps, bulk, Notion copies (tested on real SQLite)
+    testSqlite.ts          tests only: node:sqlite with the real migrations
     telegram.ts            Telegram poll loop and pushes (pet window)
     api.ts                 Rust API error → message; secret_* wrappers
     pomodoroEngine.ts      the timer (pet window only)
@@ -73,7 +78,7 @@ src/
     dashboard.css          dashboard shell and pages
   index.css                base reset and the sprite's expression keyframes
 src-tauri/
-  migrations/0001_init.sql … 0004_places.sql
+  migrations/0001_init.sql … 0005_todos.sql
   src/lib.rs               app setup, dashboard show/hide, migrations list, command list
   src/pet.rs               pet placement, resize, click-through
   src/ollama.rs            streaming chat to the local Ollama
@@ -97,9 +102,15 @@ src-tauri/
 | `notion:status` | pet → all | after every sync attempt; status is in settings |
 | `telegram:status` | pet → all | poller state changed (`telegram_status` setting) |
 | `telegram:paired` | Rust → all | a `/pair` with the right code paired a chat |
+| `calendar:sync` | dashboard → pet | "Sync now" / a feed was added or enabled |
+| `calendar:status` | pet or dashboard → all | after a calendar sync or a feed change |
+| `notion:outbox` | any window → all | a Notion write was queued or sent |
+| `todos:changed` | any window → all | after every write in `todoRepo.ts` (the page, Home, `/todo`, `/done`, Telegram) |
 
-`pomodoro:cmd` `start` may carry `minutes` (one session only, `/fokus 5`) and
-`context` (the assignment a deadline nudge offered focus for).
+`pomodoro:cmd` `start` may carry `minutes` (one session only, `/fokus 5`),
+`context` (the assignment a deadline nudge offered focus for, or a todo's
+title) and `todoId` (Todos page "Start focus"; the finished session is saved
+with that `pomodoro_sessions.todo_id`).
 
 ## Rust commands
 
@@ -107,9 +118,13 @@ src-tauri/
 |---|---|---|
 | `secret_set(name, value)`, `secret_delete(name)` | dashboard | nothing |
 | `secret_exists(name)` | both | `bool`, never the value |
-| `notion_query_database(databaseId)` | pet (sync) | every row: `{ id, archived, properties }` |
+| `notion_query_database(databaseId)` | pet (sync) | every row: `{ id, archived, properties, lastEditedTime }` |
+| `notion_set_done(pageId, done)` | pet (outbox) | refreshes the page, then sets only its Done checkbox; returns the page; needs `notion_write_enabled` |
+| `notion_create_assignment(databaseId, name, dateIso?, coursePageId?, existingSince?)` | pet (outbox) | `{ pageId, existed }`; with `existingSince` it first looks for a page an earlier attempt made |
 | `weather_geocode(name)` | both | places |
 | `weather_fetch(latitude, longitude)` | both | current + today's forecast |
+| `calendar_feed_set(feedId, url)`, `calendar_feed_delete(feedId)` | dashboard | stores/removes a feed URL in Credential Manager (`calendar_feed_<id>`); https/webcal only; never returned |
+| `calendar_fetch(feedId, daysBack, daysAhead, timeZone?)` | pet | expanded occurrences in the window; https only, redirects only to https, 15 s, 5 MB cap |
 | `location_detect()` | dashboard ("Detect now") | rough city + lat/lon from the public IP (ipapi.co); refuses unless `location_detect_enabled` is `true`; the IP is not returned |
 | `telegram_poll(offset)` | pet | `{ nextOffset, messages, paired }`, paired chat only; a message is `{ kind: "text", text }` or `{ kind: "location", latitude, longitude }` |
 | `telegram_send(text)`, `telegram_typing()` | pet | to the paired chat only, split at 4096 |
@@ -117,6 +132,7 @@ src-tauri/
 
 Errors are `{ kind, status? }` (`noToken`, `unauthorized`, `notFound`,
 `rateLimited`, `offline`, `timeout`, `http`, `badResponse`, `invalid`,
+`writesOff` (Notion writes are off), `readOnly` (403 on a Notion write),
 `notPaired`); `src/lib/api.ts` words them.
 
 ## Connected Nox (Phase 2)
@@ -260,6 +276,57 @@ curve (flash, ~60 ms dim, second flash, ~500 ms fade) via the Web Animations
 API. At most two flashes per strike and strikes 15 s apart keep it far under
 3 flashes per second; the sky glow never exceeds 0.12 opacity.
 
+## Todos page
+
+```
+QuickAdd ─ todoParse.parseQuickAdd ─┐            pet /todo, Telegram ─┐
+                                     ▼                                 ▼
+                     todoRepo.createFromQuickAdd (#list → todo_lists, @course → notion_courses)
+                                     │ emits todos:changed
+Todos page: listTodos + Notion assignments ─► todoLogic.buildList(view, search, sort) ─► groups ─► rows
+                                            └► viewCounts / summary (header line, chip counts)
+```
+
+- **Data (migration 0005).** `todos` gained `due_time`, `priority` (0-3),
+  `list_id`, `estimate_pomodoros`, `repeat_rule`, `sort_order`,
+  `completed_at`, `course_name`, `source_notion_id` (unique when set). New
+  `todo_lists` (one `is_default`, at most 8, colors from `--list-*`) and
+  `todo_subtasks` (deleted with their todo by a trigger, since foreign keys
+  are per connection). `pomodoro_sessions.todo_id` counts focus per todo.
+  The backfill split any `due_date` with a time, put every todo in the
+  default list and set `completed_at` for finished ones.
+- **Quick add.** Symbols anywhere (`!high`, `#list`, `@course`, `~3p` /
+  `~25m`); dates, times and repeats only from the end of the text, so a
+  sentence that merely contains "besok" or "3 hari" gets no date. The
+  "Nox understood" chips show the parse as you type. Unknown `#names` go to
+  the default list (the page says so). Home's add field and `/todo` use it.
+- **Views.** Today = overdue + due today, Upcoming, Inbox (no date),
+  Overdue, Done, All. Grouped by due date only (Overdue, Today, Tomorrow,
+  each later day, No date, Completed); sorted by due date then time by
+  default. Search covers title, notes and course. The page loads every open
+  todo plus the latest 300 done ones (`DONE_LOADED`); groups use
+  `content-visibility` so 500 rows stay smooth.
+- **Completing.** A toast "Marked done · title" with Undo for 5 s. A
+  repeating todo spawns its next occurrence (`nextDue`: one step after its
+  due date, moved past today so it is never born overdue; monthly keeps the
+  day, clamped); Undo deletes that occurrence again.
+- **Details panel.** Autosaves (600 ms debounce or on blur; pending edits are
+  sent when the panel closes). "Remind me" adds a `reminders` row with
+  `todo_id`, which the row shows as a bell and the Reminders card as
+  "linked todo". "Start focus" sends `pomodoro:cmd` with `todoId`.
+- **Notion rows.** With Notion set up, "Show Notion assignments" (setting
+  `todos_show_notion`, on by default) mixes in the radar's assignments
+  (same current-course rules) as read-only rows. "Add to my todos" copies
+  one into `todos` with `source_notion_id`; a second click finds the copy,
+  and the unique index refuses a duplicate even if two windows race. A
+  copied assignment shows once, as the copy. Notion is never written to.
+- **Keys.** N new, / search, ↑↓ move between rows, Space done, Enter open,
+  Esc closes the panel (or select mode) before the dashboard's own Esc.
+  Nothing fires while a field has focus.
+- **Dev seed.** In `npm run tauri dev`, `window.__noxSeedTodos(500)` in the
+  dashboard devtools fills the list for a performance check; it is not in
+  the UI or the release bundle's behaviour.
+
 ## Home's message
 
 `pickSuggestion()` picks, in order: the oldest overdue todo, something due
@@ -269,3 +336,113 @@ today, open habits, an idle line. No model call. "Start focus" sends
 ## Tests
 
 `npm test` runs Vitest on the pure modules in `src/lib/*.test.ts`.
+
+## Notion write-back (queue step 01)
+
+Off until Bas turns on **Notion writes** (`notion_write_enabled`, migration
+0006). Exactly two writes exist, both in `src-tauri/src/notion.rs`:
+
+- **Done**: `notion_set_done` reads the page first (so a page edited in
+  Notion since the last sync is current before anything is written, and the
+  Done property must really be a checkbox), then PATCHes a body with one key,
+  the Done checkbox. Nothing else is sent.
+- **Create**: `notion_create_assignment` POSTs a page with only the title,
+  date and course relation properties. Property names come from the mapping
+  settings (`notion_map_*`, default the template's Name, Date, Courses,
+  Done), are checked, and are the only keys a write body can hold.
+
+There is no command or code path that deletes, archives, renames, moves or
+edits anything else, or touches another database. A 403 on a write becomes
+`readOnly` ("enable Update/Insert content"). Ids are 32 hex digits; dates
+are checked before they reach a request.
+
+**Outbox** (`notion_outbox`, `src/lib/notionOutbox.ts`): every write is a row
+first (`set_done` or `create`, JSON payload, `pending | sent | failed`,
+attempts, last error). The pet window sends pending rows after every sync
+(so on start), and when `notion:outbox` says one was queued. Five failed
+attempts make a row `failed`, shown on Integrations with Retry; a failed Done
+is not reverted locally. While writes are off, rows wait and attempts are not
+counted. A pending Done for the same page is updated, not doubled (Undo).
+
+Creates are not idempotent in Notion. After an attempt that may have reached
+Notion (timeout, offline, bad response, 5xx), the row gets
+`uncertain_since`; the next attempt passes it (minus a minute, Notion's
+created_time has minute precision) and Rust looks for a page with that title
+created since then before creating one. A sent create is mirrored into
+`notion_assignments` and stored as the todo's `source_notion_id`, so the
+next sync upserts the same row and the Todos page shows it once.
+
+Where it is used: the checkbox on Notion rows in the Todos page (optimistic,
+with Undo), "Send to Notion" in a todo's details (a linked todo cannot be
+sent twice), and `/tugas tambah <text>` / `/tugas selesai <n>` in the pet chat
+and Telegram (course from `@course`, matched by name against synced courses;
+no match leaves the relation empty and says so).
+
+## Calendar feeds (queue step 02)
+
+Read-only ICS feeds (Google Calendar's "secret address in iCal format",
+campus feeds), up to 5. A feed URL grants read access, so it is a secret: it
+goes from the Integrations field straight to Rust (`calendar_feed_set`) and
+Credential Manager as `calendar_feed_<id>`; the database keeps only the id
+and a name (`calendar_feeds`, migration 0007). The `secret_*` commands cannot
+reach these entries; only `calendar.rs` can.
+
+`src-tauri/src/calendar.rs` fetches (https only, a redirect to anything else
+is refused, 15 s, 5 MB) and expands with `icalendar` + `rrule`: RRULE within
+yesterday … +30 days, EXDATE, RECURRENCE-ID overrides (moved or cancelled
+occurrences), CANCELLED events left out, all-day events kept as dates.
+TZIDs are read as IANA names (also a trailing `Area/City` of a prefixed id);
+an unknown TZID or a floating time uses the timezone setting, default
+Asia/Jakarta. Custom VTIMEZONE rules are not interpreted. RDATE is not
+expanded. A rule the expander rejects still shows its first occurrence; a
+broken file is an error, a broken event is skipped, nothing panics.
+
+`src/lib/calendar.ts` (pet window): sync on start, every 30 minutes and on
+`calendar:sync`; a good fetch replaces that feed's rows in
+`calendar_events`, a failed one keeps them and stores `last_error` (shown as
+"may be out of date"). Event nudges: `calendar_nudge_minutes` (default 15,
+0 = off) before each timed event, recorded in `calendar_nudges_sent` before
+delivery (kind `calendar`, held during focus like other non-reminder kinds).
+Home's "Today's schedule" lists today's events (all-day first) with a
+now/next marker; the briefing lists them first; `/jadwal`, `/jadwal besok`,
+`/jadwal minggu` answer in the pet chat and Telegram.
+
+## Natural-language capture (queue step 03)
+
+The small local model only extracts words; our code does the rest, and
+nothing is saved without a confirmation. `src/lib/captureCore.ts` (pure,
+tested) holds the pipeline:
+
+1. **Cheap gate** (`mayBeTask`): only text with a trigger word (ingetin,
+   remind me, tambah, catat, jangan lupa, besok, jam, deadline, …) or a
+   clock time goes to the model. Everything else is plain chat, unslowed.
+2. **Model** (`askJson` in `ollama.ts`, through the existing `ollama_chat`
+   command): temperature 0, `format` = a JSON schema, 20 s timeout, model
+   from `ollama_model`. It returns `{ intent, title, datePhrase?,
+   timePhrase?, priority?, list?, course? }`.
+3. **Validation**: exactly that shape, known keys and enums only, length
+   caps; anything else counts as a failure.
+4. **Dates**: the phrases must appear in the user's own words, and are
+   resolved by `todoParse` against today. The model never computes a date.
+   A reminder without a time becomes a todo.
+5. **Fallback**: on timeout, invalid JSON or Ollama off, text that is plainly
+   an instruction ("ingetin …", "catat …") goes through the deterministic
+   parser; anything else is chat.
+
+Confirmation: the pet shows "Add todo “bayar kos” · tomorrow 07:00?" with
+Add / Edit / Cancel (Edit opens Todos with quick-add prefilled via
+`todos:prefill`). Telegram replies with a preview and inline Confirm /
+Cancel buttons; Rust passes button presses (`callback_query`) through only
+from the paired private chat and only with data Nox sets (`cap:yes:<n>`);
+`telegram_send_buttons` / `telegram_answer_callback` are the two new
+commands. Previews expire after 15 minutes.
+
+"Suggest steps" in a todo's details asks the model for 3-6 steps (JSON
+array, validated), shown as a checklist with Add selected / Add all /
+Dismiss; none is saved on its own. Setting `ai_capture_enabled` (migration
+0008, default on) in Settings → Features.
+
+Evaluation: `src/lib/capture.fixtures.json` (33 phrases, id + en, typos);
+`capture.test.ts` runs them with a mocked model; `npm run eval:capture`
+(`vitest.eval.config.ts`, `capture.eval.ts`) runs them against the real
+local Ollama and prints accuracy per intent.

@@ -35,16 +35,32 @@ describe("parseCommand", () => {
     expect(parseCommand("/tugas 0", NOW)).toEqual({ kind: "error", error: "badNumber" });
   });
 
-  it("adds and lists todos", () => {
+  it("adds todos with the shared quick-add parser, and lists them", () => {
     expect(parseCommand("/todo beli kopi besok", NOW)).toEqual({
       kind: "todoAdd",
-      title: "beli kopi",
-      due_date: "2026-06-11",
+      quick: { title: "beli kopi", due_date: "2026-06-11", priority: 0 },
+    });
+    expect(parseCommand("/todo laporan besok 18:30 !high #kuliah", NOW)).toEqual({
+      kind: "todoAdd",
+      quick: { title: "laporan", due_date: "2026-06-11", due_time: "18:30", priority: 3, list: "kuliah" },
     });
     expect(parseCommand("/todo list", NOW)).toEqual({ kind: "todoList" });
     expect(parseCommand("/todo LIST", NOW)).toEqual({ kind: "todoList" });
     expect(parseCommand("/todo", NOW)).toEqual({ kind: "error", error: "todoEmpty" });
-    expect(parseCommand("/todo besok", NOW)).toEqual({ kind: "todoAdd", title: "besok" });
+    expect(parseCommand("/todo besok", NOW)).toEqual({ kind: "error", error: "todoOnlyDate" });
+  });
+
+  it("renders an added todo with its time, priority and list", () => {
+    expect(
+      renderResult(
+        { kind: "todoAdded", title: "laporan", due_date: "2026-06-11", due_time: "18:30", priority: 3, list: "Kuliah", listMatched: true },
+        tr,
+        NOW,
+      ),
+    ).toBe('cmd.todo.addedDue {"title":"laporan","due":"date.tomorrow 18:30"} pri.3 · Kuliah');
+    expect(renderResult({ kind: "todoAdded", title: "x", list: "magang", listMatched: false }, tr, NOW)).toBe(
+      'cmd.todo.added {"title":"x"} cmd.todo.noList {"list":"magang"}',
+    );
   });
 
   it("reads /done <n>", () => {
@@ -163,5 +179,67 @@ describe("/lokasi", () => {
     expect(
       renderResult({ kind: "placeShow", name: "Jatinangor", detail: "Jatinangor, West Java", others: [] }, tr).split("\n"),
     ).toEqual(['cmd.place.active {"name":"Jatinangor","detail":"Jatinangor, West Java"}', "cmd.place.addHint"]);
+  });
+});
+
+describe("/tugas tambah and /tugas selesai (Notion write-back)", () => {
+  it("parses tambah with the shared todo parser, @course included", () => {
+    expect(parseCommand("/tugas tambah laporan test jumat @metpen", NOW)).toEqual({
+      kind: "notionAdd",
+      quick: { title: "laporan test", due_date: "2026-06-12", priority: 0, course: "metpen" },
+    });
+    expect(parseCommand("/tasks add essay", NOW)).toEqual({ kind: "notionAdd", quick: { title: "essay", priority: 0 } });
+    expect(parseCommand("/tugas tambah", NOW)).toEqual({ kind: "error", error: "notionAddEmpty" });
+    expect(parseCommand("/tugas tambah besok", NOW)).toEqual({ kind: "error", error: "todoOnlyDate" });
+  });
+
+  it("parses selesai <n>", () => {
+    expect(parseCommand("/tugas selesai 2", NOW)).toEqual({ kind: "notionDone", n: 2 });
+    expect(parseCommand("/tasks done 1", NOW)).toEqual({ kind: "notionDone", n: 1 });
+    expect(parseCommand("/tugas selesai", NOW)).toEqual({ kind: "error", error: "badNumber" });
+    // Plain /tugas <n> still shows a detail.
+    expect(parseCommand("/tugas 2", NOW)).toEqual({ kind: "tasks", n: 2 });
+  });
+
+  it("replies clearly when writes are off, and names a missing course", () => {
+    expect(renderResult({ kind: "notionOff" }, tr)).toBe("cmd.notion.off");
+    expect(renderResult({ kind: "notionQueued", title: "x", course: null, courseMissing: "astro" }, tr)).toBe(
+      'cmd.notion.queued {"title":"x"} cmd.notion.noCourse {"course":"astro"}',
+    );
+  });
+});
+
+describe("/jadwal", () => {
+  it("reads today, tomorrow and the next 7 days", () => {
+    expect(parseCommand("/jadwal", NOW)).toEqual({ kind: "schedule", range: "today" });
+    expect(parseCommand("/jadwal besok", NOW)).toEqual({ kind: "schedule", range: "tomorrow" });
+    expect(parseCommand("/jadwal minggu", NOW)).toEqual({ kind: "schedule", range: "week" });
+    expect(parseCommand("/schedule week", NOW)).toEqual({ kind: "schedule", range: "week" });
+    expect(parseCommand("/jadwal kemarin", NOW)).toEqual({ kind: "error", error: "scheduleArg" });
+  });
+
+  it("renders events, all-day ones, days for the week, and a stale note", () => {
+    const text = renderResult(
+      {
+        kind: "schedule",
+        range: "week",
+        stale: true,
+        days: [
+          { label: "Wed", events: [{ time: null, title: "Libur", location: null }, { time: "08:00–10:00", title: "Jarkom", location: "Lab 1" }] },
+          { label: "Thu", events: [] },
+        ],
+      },
+      tr,
+    );
+    expect(text.split("\n")).toEqual([
+      "cmd.schedule.week",
+      "Wed",
+      "• cmd.schedule.allDay Libur",
+      "• 08:00–10:00 Jarkom (Lab 1)",
+      "cmd.schedule.stale",
+    ]);
+    expect(renderResult({ kind: "schedule", range: "today", stale: false, days: [{ label: "x", events: [] }] }, tr)).toBe(
+      "cmd.schedule.today\ncmd.schedule.none",
+    );
   });
 });

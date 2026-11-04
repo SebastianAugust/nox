@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval:capture": "vitest run --config vitest.eval.config.ts"
   },
   "dependencies": {
     "@fontsource/fredoka": "^5.3.0",

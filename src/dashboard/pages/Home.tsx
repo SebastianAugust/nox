@@ -9,17 +9,18 @@ import {
   getTodosFiltered,
   getUpcoming,
   logHabit,
-  setTodoStatus,
   todayLocal,
   type AssignmentRow,
   type TodayStats,
 } from "../../lib/db-helpers";
 import { locale, t } from "../../lib/i18n";
 import { urgency } from "../../lib/deadlines";
+import { completeTodo, reopenTodo } from "../../lib/todoRepo";
 import { urgencyText } from "../../lib/commands";
 import { getWeather, weatherKind, type WeatherState } from "../../lib/weather";
 import { listen } from "@tauri-apps/api/event";
 import { PlaceSelect } from "../widgets/Places";
+import TodaySchedule from "../widgets/TodaySchedule";
 import type { Appearance } from "../../lib/theme";
 import { pickSuggestion, type Suggestion } from "../../lib/homeMessage";
 import { habitStreak, shiftDay, type HabitLogMap } from "../../lib/streaks";
@@ -107,9 +108,12 @@ export default function PageHome({ appearance }: { appearance: Appearance }) {
     window.addEventListener("focus", load);
     // A place switch (chip, Settings, /lokasi, a Telegram pin) shows at once.
     const unlisten = listen("settings:changed", () => getWeather().then(setWeather).catch(console.error));
+    // A /todo from the pet or Telegram shows up in Today at once.
+    const unlistenTodos = listen("todos:changed", load);
     return () => {
       window.removeEventListener("focus", load);
       unlisten.then((off) => off()).catch(console.error);
+      unlistenTodos.then((off) => off()).catch(console.error);
     };
   }, [load]);
 
@@ -130,7 +134,9 @@ export default function PageHome({ appearance }: { appearance: Appearance }) {
   };
 
   const toggleTodo = async (todo: TodoRow) => {
-    await setTodoStatus(todo.id, todo.status === "done" ? "pending" : "done");
+    // Through the repository, so a repeating todo spawns its next one.
+    if (todo.status === "done") await reopenTodo(todo.id);
+    else await completeTodo(todo.id);
     load();
   };
 
@@ -192,6 +198,8 @@ export default function PageHome({ appearance }: { appearance: Appearance }) {
           <StatCard value={pom.sessionsToday} of={DAILY_FOCUS_GOAL} label={t("home.focusSessions")} />
           <StatCard value={data.stats.habitsDone} of={data.stats.habitsTotal} label={t("home.habitsDone")} />
         </div>
+
+        <TodaySchedule />
 
         <div className="home-grid">
           <Card

@@ -1,3 +1,5 @@
+mod backup;
+mod calendar;
 mod db;
 mod http;
 mod notion;
@@ -169,11 +171,52 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0004_places.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "todos: lists, steps, priority, repeat, focus",
+            sql: include_str!("../migrations/0005_todos.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 6,
+            description: "notion outbox",
+            sql: include_str!("../migrations/0006_notion_outbox.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 7,
+            description: "calendar feeds",
+            sql: include_str!("../migrations/0007_calendar.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 8,
+            description: "ai capture setting",
+            sql: include_str!("../migrations/0008_ai_capture.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 9,
+            description: "backup settings",
+            sql: include_str!("../migrations/0009_backup.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before the SQL plugin opens nox.db: back up if migrations are pending.
+    // If that backup fails, the migrations are held back (not applied
+    // silently) and the app shows why (backup_hold).
+    let newest = migrations().iter().map(|m| m.version).max().unwrap_or(0);
+    let held = match backup::startup_check(newest) {
+        backup::Startup::Apply => None,
+        backup::Startup::Hold(e) => Some(e),
+    };
+    let pending = if held.is_some() { Vec::new() } else { migrations() };
+    let hold_state = backup::BackupHold(Mutex::new(held.clone()));
+
     tauri::Builder::default()
         // First, so a second launch exits before building anything; it only
         // brings the running pet back.
@@ -182,6 +225,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .manage(DashboardState::default())
+        .manage(hold_state)
         .manage(ollama::OllamaRequests::default())
         .manage(pet::HitRegions::default())
         // Migrations run once at startup for the preloaded database (see
@@ -190,7 +234,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:nox.db", migrations())
+                .add_migrations("sqlite:nox.db", pending)
                 .build(),
         )
         .setup(|app| {
@@ -205,6 +249,10 @@ pub fn run() {
             pet::start_click_through(app.handle());
 
             sync_autostart(app.handle());
+            // The daily backup (first start of the day), in the background.
+            if held.is_none() {
+                backup::start_daily(app.handle());
+            }
             // The dashboard announces every settings write.
             let handle = app.handle().clone();
             app.listen("settings:changed", move |event| {
@@ -278,13 +326,25 @@ pub fn run() {
             secrets::secret_exists,
             secrets::secret_delete,
             notion::notion_query_database,
+            notion::notion_set_done,
+            notion::notion_create_assignment,
             weather::weather_geocode,
             weather::weather_fetch,
             weather::location_detect,
+            calendar::calendar_feed_set,
+            backup::backup_now,
+            backup::backup_check_folder,
+            backup::backup_default_folder,
+            backup::backup_open_folder,
+            backup::backup_hold,
+            calendar::calendar_feed_delete,
+            calendar::calendar_fetch,
             telegram::telegram_poll,
             telegram::telegram_pairing_start,
             telegram::telegram_send,
-            telegram::telegram_typing
+            telegram::telegram_typing,
+            telegram::telegram_send_buttons,
+            telegram::telegram_answer_callback
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -322,7 +382,7 @@ mod migration_tests {
     fn fresh_database_gets_0730_and_no_places() {
         tauri::async_runtime::block_on(async {
             let pool = pool().await;
-            run(&pool, 1..=4).await;
+            run(&pool, 1..=99).await; // every migration there is
             assert_eq!(setting(&pool, "briefing_time").await, "07:30");
             assert_eq!(setting(&pool, "active_place_id").await, "");
             assert_eq!(setting(&pool, "location_detect_enabled").await, "false");

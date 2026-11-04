@@ -24,6 +24,8 @@ export type PomSnapshot = {
   focusSec: number;
   breakSec: number;
   context: string;
+  /** The todo this session is for (Todos page "Start focus"), if any. */
+  todoId?: number | null;
 };
 
 /**
@@ -31,7 +33,7 @@ export type PomSnapshot = {
  * assignment a deadline nudge was about); both apply to that session only.
  */
 export type PomCommand =
-  | { type: "start"; minutes?: number; context?: string }
+  | { type: "start"; minutes?: number; context?: string; todoId?: number }
   | { type: "stop" | "skip" };
 
 const MAX_FOCUS_MIN = 180;
@@ -117,6 +119,7 @@ async function saveSession(endedAt: number, completed: boolean) {
   if (!completed && elapsed < MIN_SAVED_MS) return;
   await savePomodoroSession({
     context: snap.context,
+    todo_id: snap.todoId ?? null,
     duration_minutes: completed ? snap.focusSec / 60 : Math.max(1, Math.round(elapsed / 60000)),
     break_minutes: snap.breakSec / 60,
     completed,
@@ -153,6 +156,7 @@ async function handle(cmd: PomCommand) {
       ...snap,
       ...durations,
       context,
+      todoId: Number.isInteger(cmd.todoId) && cmd.todoId! > 0 ? cmd.todoId : null,
       phase: "focus",
       startedAt: now,
       endsAt: now + durations.focusSec * 1000,

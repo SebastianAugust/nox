@@ -37,24 +37,8 @@ export async function setSetting(key: string, value: string): Promise<void> {
 }
 
 // ── TODOS ──
-export async function addTodo(todo: {
-  title: string;
-  notes?: string;
-  due_date?: string;
-  context?: string;
-}): Promise<number> {
-  const db = await getDb();
-  const result = await db.execute(
-    "INSERT INTO todos (title, notes, due_date, context) VALUES (?, ?, ?, ?)",
-    [
-      todo.title,
-      todo.notes ?? null,
-      todo.due_date ?? null,
-      todo.context ?? "personal",
-    ],
-  );
-  return result.lastInsertId ?? 0;
-}
+// Writes live in todoRepo.ts (the Todos page, /todo and /done all go there).
+// This read stays for Home, the briefing and /status.
 
 export type TodoFilter = "pending" | "done" | "all";
 
@@ -67,6 +51,8 @@ export async function getTodosFiltered(
     title: string;
     notes: string | null;
     due_date: string | null;
+    due_time: string | null;
+    priority: number;
     status: string;
     created_at: string;
   }[]
@@ -79,22 +65,6 @@ export async function getTodosFiltered(
     return db.select(`SELECT * FROM todos ${order}`, [limit]);
   }
   return db.select(`SELECT * FROM todos WHERE status = ? ${order}`, [filter, limit]);
-}
-
-export async function setTodoStatus(id: number, status: string): Promise<void> {
-  const db = await getDb();
-  await db.execute(
-    "UPDATE todos SET status = ?, updated_at = datetime('now') WHERE id = ?",
-    [status, id],
-  );
-}
-
-export async function deleteTodo(id: number): Promise<void> {
-  const db = await getDb();
-  // Detach any reminder first: reminders.todo_id is a FK. foreign_keys is a
-  // per-connection pragma, so never rely on it (or on cascades) either way.
-  await db.execute("UPDATE reminders SET todo_id = NULL WHERE todo_id = ?", [id]);
-  await db.execute("DELETE FROM todos WHERE id = ?", [id]);
 }
 
 // ── REMINDERS ──
@@ -140,15 +110,18 @@ export type ReminderRow = {
   title: string;
   remind_at: string;
   status: string;
+  /** The todo it belongs to ("Remind me" on the Todos page), if any. */
+  todo_id: number | null;
 };
 
 /** Everything still to come, plus what came due in the last day. */
 export async function getReminders(): Promise<ReminderRow[]> {
   const db = await getDb();
   return db.select(
-    `SELECT id, title, remind_at, status FROM reminders
-     WHERE status = 'pending' OR remind_at >= datetime('now', '-1 day')
-     ORDER BY remind_at ASC`,
+    `SELECT r.id, r.title, r.remind_at, r.status, t.id AS todo_id
+     FROM reminders r LEFT JOIN todos t ON t.id = r.todo_id
+     WHERE r.status = 'pending' OR r.remind_at >= datetime('now', '-1 day')
+     ORDER BY r.remind_at ASC`,
   );
 }
 
@@ -431,6 +404,7 @@ export async function getHabitLogsSince(
 // ── POMODORO ──
 export async function savePomodoroSession(session: {
   context?: string;
+  todo_id?: number | null;
   duration_minutes: number;
   break_minutes?: number;
   completed: boolean;
@@ -440,8 +414,8 @@ export async function savePomodoroSession(session: {
   const db = await getDb();
   await db.execute(
     `INSERT INTO pomodoro_sessions
-     (context, duration_minutes, break_minutes, completed, started_at, ended_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+     (context, duration_minutes, break_minutes, completed, started_at, ended_at, todo_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       session.context ?? "general",
       session.duration_minutes,
@@ -449,6 +423,7 @@ export async function savePomodoroSession(session: {
       session.completed ? 1 : 0,
       session.started_at,
       session.ended_at ?? utcStamp(),
+      session.todo_id ?? null,
     ],
   );
 }

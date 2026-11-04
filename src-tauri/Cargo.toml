@@ -29,6 +29,11 @@ reqwest = { version = "0.13", default-features = false, features = ["native-tls"
 keyring = { version = "3", features = ["windows-native"] }
 tokio = { version = "1", features = ["time", "sync"] }
 getrandom = "0.3"
+# Calendar feeds (read-only): ICS parsing, RRULE expansion, time zones.
+icalendar = { version = "0.17", default-features = false, features = ["parser"] }
+rrule = "0.14"
+chrono = "0.4"
+chrono-tz = "0.10"
 tauri-plugin-notification = "2"
 
 # Same sqlx as tauri-plugin-sql, to read settings from Rust at startup.

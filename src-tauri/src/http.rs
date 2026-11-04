@@ -50,6 +50,12 @@ pub enum ApiError {
     Invalid,
     /// Telegram: no chat has been paired yet.
     NotPaired,
+    /// The answer was bigger than allowed (a calendar feed over 5 MB).
+    TooLarge,
+    /// Notion: the "Notion writes" setting is off, so nothing was sent.
+    WritesOff,
+    /// Notion: 403 on a write; the integration lacks Update/Insert content.
+    ReadOnly,
 }
 
 impl From<reqwest::Error> for ApiError {

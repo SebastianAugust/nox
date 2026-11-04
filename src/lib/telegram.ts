@@ -8,6 +8,8 @@ import { runCommand } from "./commandRunner";
 import { t } from "./i18n";
 import { chat, HISTORY_LIMIT, type ChatMessage } from "./ollama";
 import { addPlace } from "./places";
+import { applyProposal, captureEnabled, confirmText, propose } from "./capture";
+import { mayBeTask, type Proposal } from "./captureCore";
 import { getWeather, weatherLine } from "./weather";
 
 /**
@@ -91,7 +93,39 @@ async function answerChat(text: string): Promise<void> {
   );
 }
 
-type Incoming = { kind: "text"; text: string } | { kind: "location"; latitude: number; longitude: number };
+type Incoming =
+  | { kind: "text"; text: string }
+  | { kind: "location"; latitude: number; longitude: number }
+  | { kind: "callback"; id: string; data: string };
+
+// Capture previews waiting for Confirm / Cancel (button data "cap:yes:<n>").
+const PROPOSAL_TTL_MS = 15 * 60 * 1000;
+const proposals = new Map<number, { p: Exclude<Proposal, { intent: "chat" }>; at: number }>();
+let nextProposal = 1;
+
+async function offerProposal(p: Exclude<Proposal, { intent: "chat" }>): Promise<void> {
+  const id = nextProposal++;
+  proposals.set(id, { p, at: Date.now() });
+  await invoke("telegram_send_buttons", {
+    text: confirmText(p),
+    buttons: [
+      { label: t("cap.confirm"), data: `cap:yes:${id}` },
+      { label: t("todo.cancel"), data: `cap:no:${id}` },
+    ],
+  });
+}
+
+async function handleCallback(id: string, data: string): Promise<void> {
+  const m = /^cap:(yes|no):(d+)$/.exec(data);
+  await invoke("telegram_answer_callback", { callbackId: id, text: null }).catch(() => {});
+  if (!m) return;
+  const key = Number(m[2]);
+  const entry = proposals.get(key);
+  proposals.delete(key);
+  if (!entry || Date.now() - entry.at > PROPOSAL_TTL_MS) return send(t("cap.expired"));
+  if (m[1] === "no") return send(t("cap.cancelled"));
+  await send(await applyProposal(entry.p));
+}
 
 // A location pin waiting for its name. Only the paired chat reaches here
 // (Rust drops everything else), so this is always Bas's own pin.
@@ -107,6 +141,7 @@ async function savePin(name: string): Promise<void> {
 }
 
 async function handleMessage(msg: Incoming): Promise<void> {
+  if (msg.kind === "callback") return handleCallback(msg.id, msg.data);
   if (msg.kind === "location") {
     pendingPin = { latitude: msg.latitude, longitude: msg.longitude, at: Date.now() };
     return send(t("tg.pinAsk"));
@@ -116,6 +151,12 @@ async function handleMessage(msg: Incoming): Promise<void> {
   if (!cmd) {
     // The first plain message after a pin is its name.
     if (pendingPin && Date.now() - pendingPin.at < PIN_TTL_MS && text.trim()) return savePin(text);
+    // Maybe a task: preview with Confirm / Cancel; nothing is created before Confirm.
+    if (mayBeTask(text) && (await captureEnabled())) {
+      void invoke("telegram_typing").catch(() => {});
+      const p = await propose(text).catch(() => ({ intent: "chat" }) as Proposal);
+      if (p.intent !== "chat") return offerProposal(p);
+    }
     return answerChat(text);
   }
   const result = await runCommand(cmd, "telegram");

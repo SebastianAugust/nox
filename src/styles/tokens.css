@@ -62,6 +62,21 @@
   --drop: rgba(0, 0, 0, 0.4); /* hard offset shadow under pixel frames */
   --eyelid: #0a090b; /* matches the sprite's face, used by Pet's eyelids */
 
+  /* ── Todos ── */
+  /* Todo list colors: the fixed palette lists pick from (todo_lists.color). */
+  --list-mint: #3ef0a0;
+  --list-sky: #8fb4ff;
+  --list-amber: #ffc27a;
+  --list-violet: #c49bff;
+  --list-rose: #ff9e9e;
+  --list-slate: #aeb8d6;
+  /* Priority is always shown with its label too, never by color alone. */
+  --pri-none: var(--text-dim);
+  --pri-low: #8fd3ff;
+  --pri-med: var(--warn-text);
+  --pri-high: var(--danger-text);
+  --row-selected: #1b2547; /* the open todo's row */
+
   /* ── Type ── */
   --font-head: "Fredoka", "Nunito", system-ui, sans-serif;
   --font-body: "Nunito", system-ui, sans-serif;

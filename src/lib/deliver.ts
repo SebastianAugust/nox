@@ -15,7 +15,8 @@ import { getPomodoroSnapshot, subscribePomodoro } from "./pomodoroEngine";
  *   friction,  a time; check-ins and idle nudges older than STALE_MS are
  *   recap,     dropped. A queued deadline nudge is merged with a newer one,
  *   briefing,  never replaced, since each was already recorded as sent.
- *   nudge
+ *   nudge,
+ *   calendar   (event nudges merge the same way)
  *   system     shown when the pet is free, otherwise dropped (pomodoro
  *              phase messages are system, so a focus session does not block it)
  *
@@ -23,7 +24,7 @@ import { getPomodoroSnapshot, subscribePomodoro } from "./pomodoroEngine";
  * chat input focused, or the pet window hidden.
  */
 
-export type DeliveryKind = "reminder" | "checkin" | "friction" | "recap" | "briefing" | "nudge" | "system";
+export type DeliveryKind = "reminder" | "checkin" | "friction" | "recap" | "briefing" | "nudge" | "calendar" | "system";
 
 export type Delivery = {
   kind: DeliveryKind;
@@ -100,7 +101,7 @@ export async function deliver(item: Delivery): Promise<boolean> {
   // deadline nudges add up instead.
   const prev = queue.find((q) => q.kind === item.kind);
   const next =
-    item.kind === "nudge" && prev
+    (item.kind === "nudge" || item.kind === "calendar") && prev
       ? { ...item, text: `${prev.text}\n${item.text}`, focusContext: prev.focusContext ?? item.focusContext }
       : item;
   queue = queue.filter((q) => q.kind !== item.kind);

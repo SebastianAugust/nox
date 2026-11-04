@@ -71,6 +71,25 @@ pub enum Incoming {
     Text { text: String },
     /// A location pin ("Share location"), to be saved as a place.
     Location { latitude: f64, longitude: f64 },
+    /// A press on one of Nox's inline buttons (capture Confirm / Cancel).
+    Callback { id: String, data: String },
+}
+
+/// Button data Nox itself sets: short, plain characters only.
+fn valid_data(d: &str) -> bool {
+    !d.is_empty() && d.len() <= 64 && d.chars().all(|c| c.is_ascii_alphanumeric() || ":_-".contains(c))
+}
+
+/// A button press: (chat, chat type, Incoming). Only data Nox could have set.
+fn callback(update: &Value) -> Option<(i64, String, Incoming)> {
+    let cb = &update["callback_query"];
+    let id = cb["id"].as_str()?.to_string();
+    let data = cb["data"].as_str()?.to_string();
+    let chat = &cb["message"]["chat"];
+    if !valid_data(&data) {
+        return None;
+    }
+    Some((chat["id"].as_i64()?, chat["type"].as_str().unwrap_or("").to_string(), Incoming::Callback { id, data }))
 }
 
 /// Text or a location pin; anything else (photos, stickers, ...) is None.
@@ -104,7 +123,7 @@ pub async fn telegram_poll(app: AppHandle, offset: i64) -> Result<PollResult, Ap
     let updates = call(
         &token,
         "getUpdates",
-        &json!({ "offset": offset, "timeout": LONG_POLL_SECS, "allowed_updates": ["message"] }),
+        &json!({ "offset": offset, "timeout": LONG_POLL_SECS, "allowed_updates": ["message", "callback_query"] }),
         Duration::from_secs(LONG_POLL_SECS + 15),
     )
     .await?;
@@ -115,6 +134,13 @@ pub async fn telegram_poll(app: AppHandle, offset: i64) -> Result<PollResult, Ap
     for update in updates {
         if let Some(id) = update["update_id"].as_i64() {
             result.next_offset = result.next_offset.max(id + 1);
+        }
+        // Inline-button presses: from the paired private chat only.
+        if let Some((chat_id, kind, msg)) = callback(update) {
+            if Some(chat_id) == chat && kind == "private" {
+                result.messages.push(msg);
+            }
+            continue;
         }
         let message = &update["message"];
         let (Some(chat_id), Some(msg)) = (message["chat"]["id"].as_i64(), incoming(message)) else {
@@ -183,6 +209,49 @@ pub async fn telegram_send(app: AppHandle, text: String) -> Result<(), ApiError>
     Ok(())
 }
 
+#[derive(serde::Deserialize)]
+pub struct Button {
+    label: String,
+    data: String,
+}
+
+/// Send text with one row of inline buttons to the paired chat.
+#[tauri::command]
+pub async fn telegram_send_buttons(app: AppHandle, text: String, buttons: Vec<Button>) -> Result<(), ApiError> {
+    if buttons.is_empty()
+        || buttons.len() > 4
+        || buttons.iter().any(|b| !valid_data(&b.data) || b.label.is_empty() || b.label.chars().count() > 40)
+    {
+        return Err(ApiError::Invalid);
+    }
+    let token = token()?;
+    let chat = paired_chat(&app).await.ok_or(ApiError::NotPaired)?;
+    let row: Vec<Value> = buttons.iter().map(|b| json!({ "text": b.label, "callback_data": b.data })).collect();
+    let text: String = text.chars().take(MAX_MESSAGE).collect();
+    call(
+        &token,
+        "sendMessage",
+        &json!({ "chat_id": chat, "text": text, "reply_markup": { "inline_keyboard": [row] } }),
+        http::TIMEOUT,
+    )
+    .await
+    .map(|_| ())
+}
+
+/// Acknowledge a button press (stops the spinner on the phone).
+#[tauri::command]
+pub async fn telegram_answer_callback(callback_id: String, text: Option<String>) -> Result<(), ApiError> {
+    if callback_id.is_empty() || callback_id.len() > 128 || !callback_id.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Err(ApiError::Invalid);
+    }
+    let token = token()?;
+    let mut body = json!({ "callback_query_id": callback_id });
+    if let Some(t) = text {
+        body["text"] = json!(t.chars().take(200).collect::<String>());
+    }
+    call(&token, "answerCallbackQuery", &body, http::TIMEOUT).await.map(|_| ())
+}
+
 /// Show "typing…" in the paired chat (Telegram clears it after ~5 s).
 #[tauri::command]
 pub async fn telegram_typing(app: AppHandle) -> Result<(), ApiError> {
@@ -236,6 +305,15 @@ mod tests {
         let blob = "x".repeat(9000);
         let parts = split_message(&blob, 4096);
         assert_eq!(parts.iter().map(String::len).sum::<usize>(), 9000);
+    }
+
+    #[test]
+    fn reads_button_presses_with_safe_data_only() {
+        let ok = json!({ "callback_query": { "id": "42", "data": "cap:yes:3", "message": { "chat": { "id": 7, "type": "private" } } } });
+        assert_eq!(callback(&ok), Some((7, "private".into(), Incoming::Callback { id: "42".into(), data: "cap:yes:3".into() })));
+        let bad = json!({ "callback_query": { "id": "42", "data": "rm -rf /", "message": { "chat": { "id": 7, "type": "private" } } } });
+        assert_eq!(callback(&bad), None);
+        assert_eq!(callback(&json!({ "message": { "text": "hi" } })), None);
     }
 
     #[test]

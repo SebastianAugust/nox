@@ -70,6 +70,7 @@ describe("renderBriefing", () => {
       {
         dateLabel: "Tuesday, 3 November",
         weather: "Rain likely",
+        events: [],
         deadlinesToday: [{ title: "Essay", detail: "Ethics" }],
         overdue: [],
         todosToday: [],
@@ -93,7 +94,7 @@ describe("renderBriefing", () => {
 
   it("says the day is clear when there is nothing", () => {
     const text = renderBriefing(
-      { dateLabel: "d", weather: null, deadlinesToday: [], overdue: [], todosToday: [], habitsLeft: [], remindersToday: [] },
+      { dateLabel: "d", weather: null, events: [], deadlinesToday: [], overdue: [], todosToday: [], habitsLeft: [], remindersToday: [] },
       "Hi",
       tr,
     );

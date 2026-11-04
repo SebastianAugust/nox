@@ -16,11 +16,39 @@ const ALLOWED: [&str; 2] = [NOTION_TOKEN, TELEGRAM_TOKEN];
 
 const MAX_LEN: usize = 512;
 
+/// Calendar feed URLs (`calendar_feed_<id>`) are secrets too, but only the
+/// calendar module touches them; the secret_* commands cannot.
+fn is_calendar(name: &str) -> bool {
+    name.strip_prefix("calendar_feed_")
+        .is_some_and(|n| !n.is_empty() && n.len() <= 7 && n.chars().all(|c| c.is_ascii_digit()))
+}
+
 fn entry(name: &str) -> Result<Entry, String> {
-    if !ALLOWED.contains(&name) {
+    if !ALLOWED.contains(&name) && !is_calendar(name) {
         return Err("unknown secret".into());
     }
     Entry::new(SERVICE, name).map_err(|_| "credential store unavailable".into())
+}
+
+/// For the frontend commands: the two API tokens only.
+fn token_entry(name: &str) -> Result<Entry, String> {
+    if !ALLOWED.contains(&name) {
+        return Err("unknown secret".into());
+    }
+    entry(name)
+}
+
+/// Store a secret from Rust (calendar feed URLs).
+pub fn store(name: &str, value: &str) -> Result<(), String> {
+    entry(name)?.set_password(value).map_err(|_| "could not save to Credential Manager".into())
+}
+
+/// Remove a secret from Rust; a missing one is fine.
+pub fn forget(name: &str) -> Result<(), String> {
+    match entry(name)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(_) => Err("could not remove from Credential Manager".into()),
+    }
 }
 
 /// The stored token, for Rust callers only. `None` when not set or unreadable.
@@ -43,20 +71,20 @@ pub fn secret_set(name: String, value: String) -> Result<(), String> {
     {
         return Err("invalid token".into());
     }
-    entry(&name)?
+    token_entry(&name)?
         .set_password(value)
         .map_err(|_| "could not save to Credential Manager".into())
 }
 
 #[tauri::command]
 pub fn secret_exists(name: String) -> Result<bool, String> {
-    entry(&name)?;
+    token_entry(&name)?;
     Ok(get(&name).is_some())
 }
 
 #[tauri::command]
 pub fn secret_delete(name: String) -> Result<(), String> {
-    match entry(&name)?.delete_credential() {
+    match token_entry(&name)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(_) => Err("could not remove from Credential Manager".into()),
     }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { t, useLanguage } from "../lib/i18n";
 import { useAppearance } from "../lib/theme";
@@ -20,6 +21,18 @@ export function Dashboard() {
   const shellRef = useRef<HTMLDivElement>(null);
   useLanguage(); // re-render every string when the language setting changes
   const appearance = useAppearance();
+  // "Edit" on a capture card in the pet: open Todos with quick-add filled in.
+  const [prefill, setPrefill] = useState<{ text: string; n: number } | null>(null);
+  useEffect(() => {
+    const unlisten = listen<{ text?: string }>("todos:prefill", ({ payload }) => {
+      if (!payload?.text) return;
+      setPage("todos");
+      setPrefill((p) => ({ text: payload.text!, n: (p?.n ?? 0) + 1 }));
+    });
+    return () => {
+      unlisten.then((off) => off()).catch(console.error);
+    };
+  }, []);
 
   // A new page starts at the top, under a see-through bar.
   useEffect(() => setScrolled(false), [page]);
@@ -67,6 +80,9 @@ export function Dashboard() {
       >
         {page === "home" ? (
           <PageHome appearance={appearance} />
+        ) : page === "todos" ? (
+          // Todos owns its header: the subtitle is a live summary.
+          <PageTodos appearance={appearance} prefill={prefill} />
         ) : (
           <>
             <PageHeader appearance={appearance}>
@@ -76,7 +92,6 @@ export function Dashboard() {
             <main className="dash-main">
               {page === "habits" && <PageHabits />}
               {page === "pomodoro" && <PagePomodoro />}
-              {page === "todos" && <PageTodos />}
               {page === "recap" && <PageRecap />}
               {page === "integrations" && <PageIntegrations />}
               {page === "settings" && <PageSettings />}

@@ -49,6 +49,12 @@ small element.
 | Status | `--danger`, `--danger-text`, `--danger-bg`, `--danger-line`, `--danger-ink`, `--warn`, `--warn-text` |
 | Sky | `--moon`, `--moon-glow-lo/hi`, `--cloud-1/2`, `--scale-line`, `--scale-tint` |
 | Misc | `--drop` (hard pixel shadow), `--eyelid` (matches the sprite's face) |
+| Todo lists | `--list-mint`, `--list-sky`, `--list-amber`, `--list-violet`, `--list-rose`, `--list-slate`: the fixed palette `todo_lists.color` picks from; `.list-<color>` sets `--list-c` for dots and chips |
+| Priority | `--pri-none`, `--pri-low`, `--pri-med`, `--pri-high`; always shown with the label (None/Low/Medium/High), never by color alone |
+| Rows | `--row-selected`: the open todo's row (with a `--bolt` edge) |
+
+Mint means done and action; on the Todos page the open row, select mode and
+focus sessions are blue (`--bolt`), as the "active" accent.
 
 ## Type
 

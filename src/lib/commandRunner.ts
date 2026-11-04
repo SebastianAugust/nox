@@ -1,14 +1,17 @@
 import { emit } from "@tauri-apps/api/event";
 import {
   addReminder,
-  addTodo,
   clearConversation,
   getOpenAssignments,
   getTodosFiltered,
-  setTodoStatus,
   todayLocal,
   type AssignmentRow,
 } from "./db-helpers";
+import { completeTodo, createFromQuickAdd, openTodosForCommands } from "./todoRepo";
+import { flushOutbox, queueCreate, queueSetDone, writesEnabled } from "./notionOutbox";
+import { calendarStale, getEvents } from "./calendar";
+import { eventsOn, localClock, localDay } from "./calendarLogic";
+import { locale } from "./i18n";
 import { findPlace, toUtcStamp, type Command, type CommandResult, type TaskItem } from "./commands";
 import { getActivePlace, getPlaces, placeDetail, setActivePlace } from "./places";
 import { urgency } from "./deadlines";
@@ -38,12 +41,13 @@ function toTask(a: AssignmentRow, n: number, now: Date): TaskItem {
   };
 }
 
-/** The numbered lists /tugas and /todo list show; /tugas n and /done n index them. */
+/** The numbered lists /tugas and /todo list show; /tugas n, /tugas selesai n and /done n index them. */
+const taskRows = (_now: Date) => getOpenAssignments(undefined, TASKS_SHOWN);
 async function taskList(now: Date): Promise<TaskItem[]> {
-  return (await getOpenAssignments(undefined, TASKS_SHOWN)).map((a, i) => toTask(a, i + 1, now));
+  return (await taskRows(now)).map((a, i) => toTask(a, i + 1, now));
 }
 
-const todoList = () => getTodosFiltered("pending", TODOS_SHOWN);
+const todoList = () => openTodosForCommands(TODOS_SHOWN);
 
 async function sendPomodoro(cmd: PomCommand) {
   await emit("pomodoro:cmd", cmd);
@@ -58,20 +62,60 @@ export async function runCommand(cmd: Command, channel: Channel, now = new Date(
         const item = items[cmd.n - 1];
         return item ? { kind: "taskDetail", item } : { kind: "taskMissing", n: cmd.n };
       }
-      case "todoAdd":
-        await addTodo({ title: cmd.title, due_date: cmd.due_date, context: "personal" });
-        return { kind: "todoAdded", title: cmd.title, due_date: cmd.due_date };
+      case "notionAdd": {
+        const q = cmd.quick;
+        const r = await queueCreate({ name: q.title, due_date: q.due_date, due_time: q.due_time, course: q.course });
+        if (r.result === "off") return { kind: "notionOff" };
+        if (r.result === "notConfigured") return { kind: "notionNotSetUp" };
+        if (r.result !== "queued") return { kind: "failed" };
+        void flushOutbox();
+        return {
+          kind: "notionQueued",
+          title: q.title,
+          course: r.course,
+          courseMissing: q.course && !r.courseMatched ? q.course : null,
+        };
+      }
+      case "notionDone": {
+        if (!(await writesEnabled())) return { kind: "notionOff" };
+        const item = (await taskRows(now))[cmd.n - 1];
+        if (!item) return { kind: "taskMissing", n: cmd.n };
+        await queueSetDone(item.notion_id, true);
+        void flushOutbox();
+        return { kind: "notionDoneQueued", name: item.name };
+      }
+      case "todoAdd": {
+        // Same parser and fields as the Todos page; the write announces
+        // "todos:changed", so the page shows it at once.
+        const q = cmd.quick;
+        const r = await createFromQuickAdd(q);
+        return {
+          kind: "todoAdded",
+          title: q.title,
+          due_date: q.due_date,
+          due_time: q.due_time,
+          priority: q.priority,
+          list: q.list ? (r.listMatched ? r.list.name : q.list) : undefined,
+          listMatched: r.listMatched,
+        };
+      }
       case "todoList": {
         const todos = await todoList();
         return {
           kind: "todoList",
-          items: todos.map((t, i) => ({ n: i + 1, title: t.title, due_date: t.due_date })),
+          items: todos.map((t, i) => ({
+            n: i + 1,
+            title: t.title,
+            due_date: t.due_date,
+            due_time: t.due_time,
+            priority: t.priority,
+          })),
         };
       }
       case "done": {
         const todo = (await todoList())[cmd.n - 1];
         if (!todo) return { kind: "todoMissing", n: cmd.n };
-        await setTodoStatus(todo.id, "done");
+        await completeTodo(todo.id); // a repeating todo spawns its next one
         return { kind: "todoDone", title: todo.title };
       }
       case "remind":
@@ -104,6 +148,28 @@ export async function runCommand(cmd: Command, channel: Channel, now = new Date(
       case "weather": {
         const w = await getWeather();
         return { kind: "weather", line: w ? weatherLine(w) : null };
+      }
+      case "schedule": {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (cmd.range === "tomorrow" ? 1 : 0));
+        const count = cmd.range === "week" ? 7 : 1;
+        const days = Array.from({ length: count }, (_, i) => localDay(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)));
+        const [events, stale] = await Promise.all([getEvents(days[0], days[days.length - 1]), calendarStale()]);
+        return {
+          kind: "schedule",
+          range: cmd.range,
+          stale,
+          days: days.map((day) => {
+            const [y, m, d] = day.split("-").map(Number);
+            return {
+              label: new Date(y, m - 1, d).toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "short" }),
+              events: eventsOn(events, day).map((e) => ({
+                time: e.all_day ? null : `${localClock(e.start)}–${localClock(e.end)}`,
+                title: e.title,
+                location: e.location,
+              })),
+            };
+          }),
+        };
       }
       case "place": {
         const active = await getActivePlace();

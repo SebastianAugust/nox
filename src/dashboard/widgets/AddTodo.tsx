@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { addTodo, todayLocal } from "../../lib/db-helpers";
-import { parseTodoArgs } from "../../lib/commands";
+import { todayLocal } from "../../lib/db-helpers";
 import { t } from "../../lib/i18n";
+import { parseQuickAdd } from "../../lib/todoParse";
+import { createFromQuickAdd } from "../../lib/todoRepo";
 
 /**
- * Inline "Add a todo" field. Uses the pet's /todo parser, so "... besok",
- * "... today" and "... 25/12" set the due date. `defaultDue` applies when
- * none was typed (Home's Today card passes today, so the new row shows up
- * where it was added).
+ * Home's inline "Add a todo" field. Same quick-add parser as the Todos page
+ * and the pet's /todo ("besok 18:30 !high #kuliah"). `defaultDue` applies
+ * when no date was typed (Home's Today card passes today, so the new row
+ * shows up where it was added).
  */
 export default function AddTodo({ onAdded, defaultDue }: { onAdded: () => void; defaultDue?: "today" }) {
   const [value, setValue] = useState("");
@@ -17,15 +18,11 @@ export default function AddTodo({ onAdded, defaultDue }: { onAdded: () => void; 
   const submit = async () => {
     const text = value.trim();
     if (!text || busy) return;
-    const { title, due_date } = parseTodoArgs(text);
-    if (!title) return;
+    const q = parseQuickAdd(text);
+    if (!q.title) return;
     setBusy(true);
     try {
-      await addTodo({
-        title,
-        due_date: due_date ?? (defaultDue === "today" ? todayLocal() : undefined),
-        context: "personal",
-      });
+      await createFromQuickAdd(q, { defaultDue: defaultDue === "today" ? todayLocal() : undefined });
       setValue("");
       setError(false);
       onAdded();

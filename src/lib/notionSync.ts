@@ -3,6 +3,7 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { getDb, getSettings } from "./db";
 import { setSetting } from "./db-helpers";
 import { asApiError, secretExists, type ApiError } from "./api";
+import { flushOutbox } from "./notionOutbox";
 import {
   mapAssignment,
   mapCourse,
@@ -170,11 +171,14 @@ export function parseSyncError(raw: string | null | undefined): SyncError | null
  * nudge check hooks in there). Returns a stop function.
  */
 export function startNotionSync(onSynced: () => void): () => void {
-  const run = () => void syncNotion().then(onSynced);
+  // Queued Notion writes go out after every sync (and so on app start).
+  const run = () => void syncNotion().then(flushOutbox).then(onSynced);
   run();
   const timer = setInterval(run, INTERVAL_MS);
   const unlisteners = [
     listen("notion:sync", run),
+    // A write was just queued (any window): send it now.
+    listen("notion:outbox", () => void flushOutbox()),
     listen<{ name?: string }>("secrets:changed", ({ payload }) => {
       if (payload?.name === "notion_token") run();
     }),

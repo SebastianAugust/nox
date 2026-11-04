@@ -14,6 +14,7 @@
 
 import type { I18nKey } from "./i18n";
 import type { Urgency } from "./deadlines";
+import { parseQuickAdd, type Priority, type QuickAdd } from "./todoParse";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -33,53 +34,6 @@ function addDays(base: Date, days: number): Date {
   return d;
 }
 
-// "besok"/"tomorrow" and "hari ini"/"today" — Nox is used in both languages.
-const TOMORROW = /\s+(besok|tomorrow)$/i;
-const TODAY = /\s+(hari\s+ini|today)$/i;
-const DAY_MONTH = /\s+(\d{1,2})\/(\d{1,2})$/;
-
-export type ParsedTodo = { title: string; due_date?: string };
-
-/**
- * `/todo <title>` with an optional trailing date:
- *   "... besok" · "... hari ini" · "... 25/12"
- * A DD/MM that has already passed this year is read as next year.
- */
-export function parseTodoArgs(content: string, now = new Date()): ParsedTodo {
-  const text = content.trim();
-
-  const tomorrow = TOMORROW.exec(text);
-  if (tomorrow) {
-    return {
-      title: text.slice(0, tomorrow.index).trim(),
-      due_date: localDate(addDays(now, 1)),
-    };
-  }
-
-  const today = TODAY.exec(text);
-  if (today) {
-    return { title: text.slice(0, today.index).trim(), due_date: localDate(now) };
-  }
-
-  const dm = DAY_MONTH.exec(text);
-  if (dm) {
-    const day = Number(dm[1]);
-    const month = Number(dm[2]);
-    // Reject nonsense like 45/13 and let it stay part of the title.
-    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
-      let date = new Date(now.getFullYear(), month - 1, day);
-      // Guard against overflow (31/02 would roll into March).
-      if (date.getMonth() === month - 1) {
-        if (localDate(date) < localDate(now)) {
-          date = new Date(now.getFullYear() + 1, month - 1, day);
-        }
-        return { title: text.slice(0, dm.index).trim(), due_date: localDate(date) };
-      }
-    }
-  }
-
-  return { title: text };
-}
 
 export type ParsedRemind = {
   title: string;
@@ -155,11 +109,17 @@ export type CommandError =
   | "remindEmpty"
   | "remindNoTime"
   | "badNumber"
-  | "badMinutes";
+  | "badMinutes"
+  | "notionAddEmpty"
+  | "scheduleArg";
 
 export type Command =
   | { kind: "tasks"; n?: number }
-  | { kind: "todoAdd"; title: string; due_date?: string }
+  /** Notion write-back (only with "Notion writes" on). */
+  | { kind: "notionAdd"; quick: QuickAdd }
+  | { kind: "notionDone"; n: number }
+  /** Parsed by the same quick-add parser as the Todos page. */
+  | { kind: "todoAdd"; quick: QuickAdd }
   | { kind: "todoList" }
   | { kind: "done"; n: number }
   | { kind: "remind"; title: string; at: Date }
@@ -168,6 +128,7 @@ export type Command =
   | { kind: "status" }
   | { kind: "weather" }
   | { kind: "place"; name?: string }
+  | { kind: "schedule"; range: "today" | "tomorrow" | "week" }
   | { kind: "help" }
   | { kind: "clear" }
   | { kind: "dashboard" }
@@ -176,7 +137,8 @@ export type Command =
 
 // Indonesian name first, English aliases after. Telegram's menu sends /start.
 type Bare = "stop" | "status" | "weather" | "help" | "clear" | "dashboard";
-const ALIASES: Record<string, Bare | "tasks" | "todo" | "done" | "remindAny" | "focus" | "place"> = {
+type WithArg = "tasks" | "todo" | "done" | "remindAny" | "focus" | "place" | "schedule";
+const ALIASES: Record<string, Bare | WithArg> = {
   tugas: "tasks",
   tasks: "tasks",
   assignments: "tasks",
@@ -194,6 +156,9 @@ const ALIASES: Record<string, Bare | "tasks" | "todo" | "done" | "remindAny" | "
   cuaca: "weather",
   weather: "weather",
   lokasi: "place",
+  jadwal: "schedule",
+  schedule: "schedule",
+  agenda: "schedule",
   location: "place",
   tempat: "place",
   place: "place",
@@ -256,15 +221,27 @@ export function parseCommand(input: string, now = new Date()): Command | null {
       return { kind: "unknown", name };
     case "tasks": {
       if (!arg) return { kind: "tasks" };
+      // Notion write-back: /tugas tambah <text>, /tugas selesai <n>.
+      const sub = /^(tambah|add|selesai|done)\b\s*([\s\S]*)$/i.exec(arg);
+      if (sub) {
+        const rest = sub[2].trim();
+        if (/^(tambah|add)$/i.test(sub[1])) {
+          if (!rest) return { kind: "error", error: "notionAddEmpty" };
+          const quick = parseQuickAdd(rest, now);
+          return quick.title ? { kind: "notionAdd", quick } : { kind: "error", error: "todoOnlyDate" };
+        }
+        const done = positive(rest);
+        return done ? { kind: "notionDone", n: done } : { kind: "error", error: "badNumber" };
+      }
       const n = positive(arg);
       return n ? { kind: "tasks", n } : { kind: "error", error: "badNumber" };
     }
     case "todo": {
       if (!arg) return { kind: "error", error: "todoEmpty" };
       if (/^(list|daftar|ls)$/i.test(arg)) return { kind: "todoList" };
-      const { title, due_date } = parseTodoArgs(arg, now);
-      if (!title) return { kind: "error", error: "todoOnlyDate" };
-      return due_date ? { kind: "todoAdd", title, due_date } : { kind: "todoAdd", title };
+      const quick = parseQuickAdd(arg, now);
+      if (!quick.title) return { kind: "error", error: "todoOnlyDate" };
+      return { kind: "todoAdd", quick };
     }
     case "done": {
       const n = positive(arg);
@@ -280,6 +257,12 @@ export function parseCommand(input: string, now = new Date()): Command | null {
         return { kind: "remind", title: old.title, at: new Date(old.remind_at.replace(" ", "T") + "Z") };
       }
       return { kind: "error", error: "remindNoTime" };
+    }
+    case "schedule": {
+      if (!arg) return { kind: "schedule", range: "today" };
+      if (/^(besok|tomorrow)$/i.test(arg)) return { kind: "schedule", range: "tomorrow" };
+      if (/^(minggu|week|pekan|7)$/i.test(arg)) return { kind: "schedule", range: "week" };
+      return { kind: "error", error: "scheduleArg" };
     }
     case "place":
       return arg ? { kind: "place", name: arg.slice(0, 40) } : { kind: "place" };
@@ -310,8 +293,25 @@ export type CommandResult =
   | { kind: "tasks"; items: TaskItem[] }
   | { kind: "taskDetail"; item: TaskItem }
   | { kind: "taskMissing"; n: number }
-  | { kind: "todoAdded"; title: string; due_date?: string }
-  | { kind: "todoList"; items: { n: number; title: string; due_date: string | null }[] }
+  | { kind: "notionQueued"; title: string; course: string | null; courseMissing: string | null }
+  | { kind: "notionDoneQueued"; name: string }
+  | { kind: "notionOff" }
+  | { kind: "notionNotSetUp" }
+  | { kind: "notionLinked" }
+  | {
+      kind: "todoAdded";
+      title: string;
+      due_date?: string;
+      due_time?: string;
+      priority?: Priority;
+      /** The list it went to, and whether #name matched it. */
+      list?: string;
+      listMatched?: boolean;
+    }
+  | {
+      kind: "todoList";
+      items: { n: number; title: string; due_date: string | null; due_time?: string | null; priority?: Priority }[];
+    }
   | { kind: "todoDone"; title: string }
   | { kind: "todoMissing"; n: number }
   | { kind: "reminderSet"; title: string; at: Date }
@@ -332,6 +332,12 @@ export type CommandResult =
   | { kind: "placeSwitched"; name: string; line: string | null }
   | { kind: "placeMissing"; name: string; names: string[] }
   | { kind: "placeNone" }
+  | {
+      kind: "schedule";
+      range: "today" | "tomorrow" | "week";
+      days: { label: string; events: { time: string | null; title: string; location: string | null }[] }[];
+      stale: boolean;
+    }
   | { kind: "help"; telegram: boolean }
   | { kind: "cleared" }
   | { kind: "dashboard" }
@@ -381,27 +387,50 @@ export function renderResult(r: CommandResult, tr: Translate, now = new Date()):
         .filter(Boolean)
         .join("\n");
     }
+    case "notionQueued":
+      return [
+        tr("cmd.notion.queued", { title: r.title }),
+        r.course ? tr("cmd.notion.course", { course: r.course }) : null,
+        r.courseMissing ? tr("cmd.notion.noCourse", { course: r.courseMissing }) : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+    case "notionDoneQueued":
+      return tr("cmd.notion.doneQueued", { name: r.name });
+    case "notionOff":
+      return tr("cmd.notion.off");
+    case "notionNotSetUp":
+      return tr("cmd.notion.notSetUp");
+    case "notionLinked":
+      return tr("cmd.notion.linked");
     case "taskMissing":
       return tr("cmd.tasks.missing", { n: r.n });
-    case "todoAdded":
-      return r.due_date
+    case "todoAdded": {
+      const words = { today: tr("date.today"), tomorrow: tr("date.tomorrow") };
+      const base = r.due_date
         ? tr("cmd.todo.addedDue", {
             title: r.title,
-            due: describeDue(r.due_date, { today: tr("date.today"), tomorrow: tr("date.tomorrow") }, now),
+            due: `${describeDue(r.due_date, words, now)}${r.due_time ? ` ${r.due_time}` : ""}`,
           })
         : tr("cmd.todo.added", { title: r.title });
+      const extra = [
+        r.priority ? tr(`pri.${r.priority}`) : null,
+        r.list ? (r.listMatched === false ? tr("cmd.todo.noList", { list: r.list }) : r.list) : null,
+      ].filter(Boolean);
+      return extra.length ? `${base} ${extra.join(" · ")}` : base;
+    }
     case "todoList":
       return r.items.length
         ? [
             tr("cmd.todo.listHead"),
-            ...r.items.map(
-              (i) =>
-                `${i.n}. ${i.title}${
-                  i.due_date
-                    ? ` · ${describeDue(i.due_date, { today: tr("date.today"), tomorrow: tr("date.tomorrow") }, now)}`
-                    : ""
-                }`,
-            ),
+            ...r.items.map((i) => {
+              const due = i.due_date
+                ? ` · ${describeDue(i.due_date, { today: tr("date.today"), tomorrow: tr("date.tomorrow") }, now)}${
+                    i.due_time ? ` ${i.due_time}` : ""
+                  }`
+                : "";
+              return `${i.n}. ${i.title}${due}${i.priority ? ` · ${tr(`pri.${i.priority}`)}` : ""}`;
+            }),
             tr("cmd.todo.listHint"),
           ].join("\n")
         : tr("cmd.todo.listEmpty");
@@ -442,6 +471,19 @@ export function renderResult(r: CommandResult, tr: Translate, now = new Date()):
       return [tr("cmd.place.switched", { name: r.name }), r.line].filter(Boolean).join("\n");
     case "placeMissing":
       return tr("cmd.place.missing", { name: r.name, names: r.names.join(", ") || "-" });
+    case "schedule": {
+      const lines = [tr(`cmd.schedule.${r.range}`)];
+      const withEvents = r.days.filter((d) => d.events.length);
+      if (!withEvents.length) lines.push(tr("cmd.schedule.none"));
+      for (const d of withEvents) {
+        if (r.range === "week") lines.push(d.label);
+        for (const e of d.events) {
+          lines.push(`• ${e.time ?? tr("cmd.schedule.allDay")} ${e.title}${e.location ? ` (${e.location})` : ""}`);
+        }
+      }
+      if (r.stale) lines.push(tr("cmd.schedule.stale"));
+      return lines.join("\n");
+    }
     case "placeNone":
       return tr("cmd.place.none");
     case "weather":

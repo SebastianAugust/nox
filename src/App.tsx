@@ -17,6 +17,10 @@ import { startNotionSync } from "./lib/notionSync";
 import { startBriefingScheduler } from "./lib/briefingScheduler";
 import { startNudgeScheduler } from "./lib/nudgeScheduler";
 import { pushTelegram, startTelegram } from "./lib/telegram";
+import { startCalendar } from "./lib/calendar";
+import { applyProposal, captureEnabled, confirmText, editInTodos, propose } from "./lib/capture";
+import { mayBeTask, type Proposal } from "./lib/captureCore";
+import { localClock } from "./lib/calendarLogic";
 import { useAppearance } from "./lib/theme";
 import { saveCheckin, startCheckinScheduler, type Mood } from "./lib/checkin";
 import { recordInteraction, startFrictionDetector } from "./lib/friction";
@@ -74,6 +78,9 @@ function App() {
   // The bubble text that offers Start focus / Later; actions show only while
   // the bubble still says exactly that.
   const [actionsFor, setActionsFor] = useState<string | null>(null);
+  // A capture proposal waiting for Add / Edit / Cancel, and its bubble text.
+  const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [proposalText, setProposalText] = useState<string | null>(null);
   // What that bubble's "Start focus" is about (a deadline nudge's assignment).
   const focusContextRef = useRef<string | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
@@ -221,6 +228,10 @@ function App() {
             focusContextRef.current = focusContext;
             setActionsFor(text);
             break;
+          case "calendar":
+            clearRevert();
+            flashState("alert", 15000);
+            break;
           case "briefing":
             clearRevert();
             flashState("happy", 15000);
@@ -307,11 +318,21 @@ function App() {
       void pushTelegram("briefing", text);
     });
     const stopTelegram = startTelegram();
+    // Calendar feeds: sync, and a nudge before each event (held during focus).
+    const stopCalendar = startCalendar((events) => {
+      const text = events
+        .map((e) =>
+          t("cal.nudgeText", { title: e.title, time: localClock(e.start), where: e.location ? ` · ${e.location}` : "" }),
+        )
+        .join("\n");
+      void deliver({ kind: "calendar", text });
+    });
     return () => {
       nudges.stop();
       stopSync();
       stopBriefing();
       stopTelegram();
+      stopCalendar();
     };
   }, []);
 
@@ -466,6 +487,23 @@ function App() {
 
     if (await handleCommand(text)) return;
 
+    // Maybe a task ("ingetin besok jam 7 bayar kos"): ask the local model,
+    // then confirm. Casual talk never reaches this and is not slowed down.
+    if (mayBeTask(text) && (await captureEnabled())) {
+      setPetState("thinking");
+      setBubbleText(t("pet.thinking"));
+      setOpen(false);
+      const p = await propose(text).catch(() => ({ intent: "chat" }) as Proposal);
+      if (p.intent !== "chat") {
+        const ask = confirmText(p);
+        setPetState(ambientState());
+        setProposal(p);
+        setProposalText(ask);
+        setBubbleText(ask);
+        return;
+      }
+    }
+
     const history = messages;
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -519,6 +557,34 @@ function App() {
     );
   };
 
+  // Capture confirmation: nothing is created before Add.
+  const confirmProposal = async () => {
+    touch();
+    const p = proposal;
+    setProposal(null);
+    if (!p || p.intent === "chat") return;
+    try {
+      setBubbleText(await applyProposal(p));
+      flashState("excited");
+    } catch (err) {
+      console.error(err);
+      setBubbleText(t("cmd.saveFailed"));
+    }
+    scheduleRevert();
+  };
+  const editProposal = async () => {
+    touch();
+    const p = proposal;
+    setProposal(null);
+    if (p && p.intent !== "chat") await editInTodos(p).catch(console.error);
+  };
+  const cancelProposal = () => {
+    touch();
+    setProposal(null);
+    setBubbleText(t("cap.cancelled"));
+    scheduleRevert();
+  };
+
   const later = () => {
     touch();
     setActionsFor(null);
@@ -537,7 +603,19 @@ function App() {
         isStreaming={isStreaming}
         onStop={handleStop}
         actions={
-          actionsFor !== null && actionsFor === bubbleText ? (
+          proposal && proposalText === bubbleText ? (
+            <>
+              <ChunkyButton size="sm" onClick={() => void confirmProposal()}>
+                {t("cap.add")}
+              </ChunkyButton>
+              <ChunkyButton size="sm" variant="secondary" onClick={() => void editProposal()}>
+                {t("cap.edit")}
+              </ChunkyButton>
+              <ChunkyButton size="sm" variant="quiet" onClick={cancelProposal}>
+                {t("todo.cancel")}
+              </ChunkyButton>
+            </>
+          ) : actionsFor !== null && actionsFor === bubbleText ? (
             <>
               <ChunkyButton size="sm" onClick={startFocusFromBubble}>
                 {t("pet.startFocus")}

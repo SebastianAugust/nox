@@ -6,7 +6,7 @@ use tauri_plugin_sql::{DbInstances, DbPool};
 
 const DB: &str = "sqlite:nox.db";
 
-async fn with_pool<T>(
+pub(crate) async fn with_pool<T>(
     app: &AppHandle,
     f: impl AsyncFnOnce(&sqlx::SqlitePool) -> Option<T>,
 ) -> Option<T> {

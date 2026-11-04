@@ -16,7 +16,9 @@ export type ApiErrorKind =
   | "http"
   | "badResponse"
   | "invalid"
-  | "notPaired";
+  | "notPaired"
+  | "writesOff"
+  | "readOnly";
 
 export type ApiError = { kind: ApiErrorKind; status?: number };
 
@@ -51,6 +53,10 @@ export function apiErrorText(err: unknown, service: Service): string {
       return t("api.invalid");
     case "notPaired":
       return t("tg.notPaired");
+    case "writesOff":
+      return t("api.writesOff");
+    case "readOnly":
+      return t("api.readOnly");
     default:
       return t("api.badResponse");
   }

@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nox todos — proposed page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&amp;family=Pixelify+Sans:wght@500;600;700&amp;family=Nunito:wght@600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0A0E1C}
+a{color:#3EF0A0}a:hover{color:#8BF7C8}
+button{font:inherit;cursor:pointer}
+input{font:inherit}
+@keyframes nox-twinkle{0%,100%{opacity:.25}50%{opacity:1}}
+@keyframes nox-moon{0%,100%{box-shadow:0 0 40px rgba(246,235,200,.14)}50%{box-shadow:0 0 80px rgba(246,235,200,.3)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<div style="position: relative; min-height: 1100px; background: #0A0E1C; color: #EEF2FF; font-family: Nunito, system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <!-- sky header (same as the app) -->
+  <div style="position: relative; overflow: hidden; background: #0E1530; padding: 14px 14px 0 24px">
+    <span aria-hidden="true" style="position: absolute; left: 12%; top: 74px; width: 3px; height: 3px; background: #F6EBC8; animation: nox-twinkle 3.2s ease-in-out infinite"></span>
+    <span aria-hidden="true" style="position: absolute; left: 36%; top: 96px; width: 2px; height: 2px; background: #F6EBC8; animation: nox-twinkle 4.1s ease-in-out infinite 1.2s"></span>
+    <span aria-hidden="true" style="position: absolute; left: 52%; top: 24px; width: 4px; height: 4px; background: {{bolt}}; animation: nox-twinkle 2.6s ease-in-out infinite 0.4s"></span>
+    <span aria-hidden="true" style="position: absolute; right: 9%; top: 52px; width: 58px; height: 58px; border-radius: 29px; background: #F6EBC8; animation: nox-moon 7s ease-in-out infinite"></span>
+    <span aria-hidden="true" style="position: absolute; right: calc(9% - 14px); top: 44px; width: 54px; height: 54px; border-radius: 27px; background: #0E1530"></span>
+    <div style="position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 14px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span aria-hidden="true" style="display: flex; gap: 4px"><span style="width: 9px; height: 13px; border-radius: 50%; background: {{accent}}; display: flex; justify-content: center; align-items: center"><span style="width: 2px; height: 9px; border-radius: 1px; background: #05070F"></span></span><span style="width: 9px; height: 13px; border-radius: 50%; background: {{accent}}; display: flex; justify-content: center; align-items: center"><span style="width: 2px; height: 9px; border-radius: 1px; background: #05070F"></span></span></span>
+        <span style="font-family: Fredoka, sans-serif; font-weight: 700; font-size: 22px">nox</span>
+      </div>
+      <nav aria-label="Main" style="flex: 1; display: flex; justify-content: center">
+        <div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 5px; border-radius: 999px; background: rgba(10,14,28,0.75); border: 1px solid #263055">
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Home</a>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Habits</a>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Focus</a>
+          <a href="#" aria-current="page" style="padding: 8px 14px; border-radius: 999px; background: {{accent}}; color: #06261A; text-decoration: none; font-weight: 800; font-size: 14px">Todos</a>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Recap</a>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Integrations</a>
+          <a href="#" style="padding: 8px 14px; border-radius: 999px; color: #AEB8D6; text-decoration: none; font-weight: 700; font-size: 14px">Settings</a>
+        </div>
+      </nav>
+      <div style="display: flex; gap: 6px">
+        <button aria-label="Minimize" style="width: 34px; height: 34px; border-radius: 17px; border: 0; background: rgba(10,14,28,0.75); color: #AEB8D6; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></button>
+        <button aria-label="Close" style="width: 34px; height: 34px; border-radius: 17px; border: 0; background: rgba(10,14,28,0.75); color: #AEB8D6; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></button>
+      </div>
+    </div>
+    <div style="position: relative; padding: 22px 0 26px">
+      <h1 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 34px">Todos</h1>
+      <p style="margin: 4px 0 0; font-size: 14px; font-weight: 700; color: #AEB8D6">{{subtitle}}</p>
+    </div>
+    <div aria-hidden="true" style="height: 18px; margin: 0 -14px 0 -24px; background-color: #0A0E1C; background-image: radial-gradient(circle at 50% 100%, transparent 9px, #1A2242 10px, transparent 11px), radial-gradient(circle at 50% 100%, transparent 9px, #1A2242 10px, transparent 11px); background-size: 22px 12px; background-position: 0 0, 11px 6px; border-radius: 50% 50% 0 0 / 100% 100% 0 0"></div>
+  </div>
+
+  <!-- body -->
+  <div style="flex: 1; box-sizing: border-box; width: 100%; max-width: 1360px; padding: 14px 24px 96px; display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start">
+
+    <div style="flex: 1 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+
+      <!-- quick add -->
+      <div style="padding: 12px 14px; border-radius: 22px; background: #0F1426; border: 2px dashed #3A4675; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <label for="t-add" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Add a todo</label>
+          <input id="t-add" value="{{input}}" onChange="{{onInput}}" placeholder="Add a todo… try “besok 18:30 !high #kuliah”" style="flex: 1; min-width: 0; border: 0; background: transparent; color: #EEF2FF; outline: none; font-size: 16px; font-weight: 700">
+          <button onClick="{{addTodo}}" style="height: 38px; padding: 0 18px; border-radius: 19px; border: 0; background: {{accent}}; color: #06261A; font-weight: 800; font-size: 14px; box-shadow: 0 4px 0 #1C8A5B">Add</button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+          <span style="font-size: 12px; font-weight: 800; color: #AEB8D6; margin-right: 2px">Nox understood</span>
+          <sc-for list="{{parsed}}" as="c" hint-placeholder-count="5">
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 13px; background: #1A2342; color: {{c.color}}; font-weight: 800; font-size: 12px"><span style="font-size: 11px; color: #AEB8D6; font-weight: 700">{{c.kind}}</span>{{c.text}}</span>
+          </sc-for>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+          <span style="font-size: 12px; color: #AEB8D6; font-weight: 700">Try:</span>
+          <sc-for list="{{examples}}" as="e" hint-placeholder-count="3">
+            <button onClick="{{e.pick}}" style="height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid #3A4675; background: transparent; color: #EEF2FF; font-weight: 700; font-size: 12px">{{e.text}}</button>
+          </sc-for>
+          <span style="margin-left: auto; font-size: 12px; color: #AEB8D6">Enter adds · Shift+Enter adds another</span>
+        </div>
+      </div>
+
+      <!-- main card -->
+      <section aria-label="Todo list" style="padding: 18px; border-radius: 26px; background: #141B33; display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+          <h2 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 22px; flex: 1 1 auto">{{viewTitle}}</h2>
+          <div style="flex: 1 1 200px; max-width: 260px; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 18px; background: #0A0E1C; border: 1px solid #263055">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#AEB8D6" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+            <label for="t-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search todos</label>
+            <input id="t-search" placeholder="Search" style="flex: 1; min-width: 0; border: 0; background: transparent; color: #EEF2FF; outline: none; font-size: 13px; font-weight: 700">
+            <span aria-hidden="true" style="font-family: 'Pixelify Sans', monospace; font-size: 11px; color: #7F8AAE; border: 1px solid #263055; border-radius: 4px; padding: 0 4px">/</span>
+          </div>
+          <button style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid #3A4675; background: transparent; color: #EEF2FF; font-weight: 700; font-size: 13px">Sort: Due date</button>
+          <button onClick="{{toggleSelect}}" aria-pressed="{{selectPressed}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{selectBorder}}; background: {{selectBg}}; color: #EEF2FF; font-weight: 700; font-size: 13px">{{selectLabel}}</button>
+        </div>
+
+        <!-- view chips + notion switch -->
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+          <div role="tablist" aria-label="Views" style="display: flex; flex-wrap: wrap; gap: 4px; padding: 5px; border-radius: 999px; background: #0A0E1C">
+            <sc-for list="{{views}}" as="v" hint-placeholder-count="6">
+              <button role="tab" aria-selected="{{v.selected}}" onClick="{{v.pick}}" style="display: flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border-radius: 19px; border: 0; background: {{v.bg}}; color: {{v.color}}; font-weight: 800; font-size: 14px">{{v.name}}<span style="font-family: 'Pixelify Sans', monospace; font-size: 12px; padding: 0 6px; border-radius: 7px; background: {{v.pillBg}}; color: {{v.pillColor}}">{{v.count}}</span></button>
+            </sc-for>
+          </div>
+          <button onClick="{{toggleNotion}}" role="switch" aria-checked="{{notionOn}}" style="margin-left: auto; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 8px; border-radius: 18px; border: 1px solid #3A4675; background: transparent; color: #EEF2FF; font-weight: 700; font-size: 13px">
+            <span aria-hidden="true" style="width: 30px; height: 18px; border-radius: 9px; background: {{notionTrack}}; position: relative"><span style="position: absolute; top: 2px; left: {{notionKnob}}; width: 14px; height: 14px; border-radius: 7px; background: #EEF2FF"></span></span>
+            Show Notion assignments
+          </button>
+        </div>
+
+        <!-- bulk bar -->
+        <sc-if value="{{selectMode}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 16px; background: #0A0E1C; border: 2px solid {{bolt}}">
+            <span style="font-weight: 800; font-size: 14px; margin-right: 6px">{{pickedCount}} selected</span>
+            <button onClick="{{bulkComplete}}" style="height: 34px; padding: 0 14px; border-radius: 17px; border: 0; background: {{accent}}; color: #06261A; font-weight: 800; font-size: 13px">Complete</button>
+            <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #3A4675; background: transparent; color: #EEF2FF; font-weight: 700; font-size: 13px">Set date</button>
+            <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #3A4675; background: transparent; color: #EEF2FF; font-weight: 700; font-size: 13px">Priority</button>
+            <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #3A4675; background: transparent; color: #EEF2FF; font-weight: 700; font-size: 13px">Move to list</button>
+            <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #6A2C3C; background: transparent; color: #FF9E9E; font-weight: 700; font-size: 13px">Delete</button>
+          </div>
+        </sc-if>
+
+        <!-- groups -->
+        <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; align-items: baseline; gap: 8px; padding: 6px 4px 2px">
+              <h3 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 16px; color: {{g.color}}">{{g.title}}</h3>
+              <span style="font-size: 13px; font-weight: 800; color: #AEB8D6">{{g.count}}</span>
+            </div>
+            <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="3">
+              <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: {{r.bg}}; border: 2px solid {{r.border}}">
+                <button onClick="{{r.toggle}}" aria-label="{{r.toggleLabel}}" aria-pressed="{{r.pressed}}" style="flex: none; width: 24px; height: 24px; border-radius: 8px; border: 2px solid {{r.checkBorder}}; background: {{r.checkBg}}; display: flex; align-items: center; justify-content: center; padding: 0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#06261A" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity: {{r.checkOpacity}}"><path d="M5 12l5 5 9-10"></path></svg></button>
+                <button onClick="{{r.select}}" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; border: 0; background: transparent; color: #EEF2FF; text-align: left; padding: 0">
+                  <span style="display: flex; align-items: center; gap: 8px; max-width: 100%">
+                    <span style="font-weight: 800; font-size: 15px; color: {{r.titleColor}}; text-decoration: {{r.deco}}">{{r.title}}</span>
+                    <sc-if value="{{r.notion}}" hint-placeholder-val="{{ false }}"><span style="font-family: 'Pixelify Sans', monospace; font-size: 11px; padding: 0 6px; border: 1px solid #3A4675; border-radius: 4px; color: #AEB8D6">NOTION</span></sc-if>
+                  </span>
+                  <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+                    <sc-if value="{{r.showDue}}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; background: {{r.dueBg}}; color: {{r.dueColor}}; font-weight: 800; font-size: 12px">{{r.due}}</span></sc-if>
+                    <sc-if value="{{r.showPri}}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 11px; background: #1A2342; color: {{r.priColor}}; font-weight: 800; font-size: 12px"><svg width="11" height="11" viewBox="0 0 24 24" fill="{{r.priColor}}" aria-hidden="true"><path d="M5 3v18M5 4h12l-2.5 4 2.5 4H5"></path></svg>{{r.priLabel}}</span></sc-if>
+                    <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: #AEB8D6"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 2px; background: {{r.listColor}}"></span>{{r.list}}</span>
+                    <sc-if value="{{r.showCourse}}" hint-placeholder-val="{{ true }}"><span style="font-size: 12px; font-weight: 700; color: #AEB8D6">· {{r.course}}</span></sc-if>
+                    <sc-if value="{{r.showSubs}}" hint-placeholder-val="{{ true }}"><span style="font-size: 12px; font-weight: 800; color: #AEB8D6">· {{r.subs}} steps</span></sc-if>
+                    <sc-if value="{{r.showRepeat}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; font-weight: 800; color: #AEB8D6">· repeats</span></sc-if>
+                    <sc-if value="{{r.showEst}}" hint-placeholder-val="{{ true }}"><span style="font-size: 12px; font-weight: 800; color: {{bolt}}">· {{r.est}}</span></sc-if>
+                    <sc-if value="{{r.remind}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 800; color: #FFC27A"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l2 2H4zM10 21h4"></path></svg>reminder</span></sc-if>
+                  </span>
+                </button>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+
+        <sc-if value="{{empty}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 36px 0 28px">
+            <span aria-hidden="true" style="position: relative; width: 56px; height: 56px; display: block"><span style="position: absolute; left: 6px; top: 6px; width: 44px; height: 44px; border-radius: 22px; background: #F6EBC8"></span><span style="position: absolute; left: 20px; top: 0; width: 42px; height: 42px; border-radius: 21px; background: #141B33"></span></span>
+            <span style="font-weight: 800; font-size: 15px; color: #AEB8D6; text-align: center">{{emptyText}}</span>
+          </div>
+        </sc-if>
+      </section>
+
+      <!-- reminders -->
+      <section aria-label="Reminders" style="padding: 18px; border-radius: 26px; background: #141B33; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between">
+          <h2 style="margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 20px">Reminders</h2>
+          <span style="font-size: 12px; font-weight: 800; color: #AEB8D6">3 upcoming</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; background: #1A2342">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFC27A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l2 2H4zM10 21h4"></path></svg>
+          <span style="flex: 1; font-weight: 800; font-size: 14px">Prak Jarkom</span>
+          <span style="font-size: 12px; font-weight: 700; color: #AEB8D6">linked todo</span>
+          <span style="font-family: 'Pixelify Sans', monospace; font-size: 14px">17:30</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; background: #1A2342">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFC27A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l2 2H4zM10 21h4"></path></svg>
+          <span style="flex: 1; font-weight: 800; font-size: 14px">rapat HIMATIF</span>
+          <span style="font-size: 12px; font-weight: 700; color: #AEB8D6">linked todo</span>
+          <span style="font-family: 'Pixelify Sans', monospace; font-size: 14px">19:00</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; background: #1A2342">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFC27A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l2 2H4zM10 21h4"></path></svg>
+          <span style="flex: 1; font-weight: 800; font-size: 14px">standup</span>
+          <span style="font-size: 12px; font-weight: 700; color: #AEB8D6">every day</span>
+          <span style="font-family: 'Pixelify Sans', monospace; font-size: 14px">09:00</span>
+        </div>
+        <p style="margin: 2px 0 0; font-size: 13px; font-weight: 600; color: #AEB8D6">Set one from the pet: /remind standup at 09:00</p>
+      </section>
+    </div>
+
+    <!-- details drawer -->
+    <sc-if value="{{hasSel}}" hint-placeholder-val="{{ true }}">
+    <aside aria-label="Todo details" style="flex: 0 0 340px; box-sizing: border-box; padding: 18px; border-radius: 26px; background: #141B33; border: 2px solid {{bolt}}; box-shadow: 0 0 28px {{boltGlow}}; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; align-items: flex-start; gap: 8px">
+        <h2 style="flex: 1; margin: 0; font-family: Fredoka, sans-serif; font-weight: 600; font-size: 22px; line-height: 1.2">{{d.title}}</h2>
+        <button onClick="{{closeDrawer}}" aria-label="Close details" style="width: 32px; height: 32px; border-radius: 16px; border: 0; background: #1A2342; color: #AEB8D6; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></button>
+      </div>
+      <sc-if value="{{d.notion}}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 10px 12px; border-radius: 12px; background: #0A0E1C; border: 1px solid #3A4675; font-size: 13px; line-height: 1.5; font-weight: 700; color: #AEB8D6"><span style="font-family: 'Pixelify Sans', monospace; font-size: 11px; padding: 0 6px; border: 1px solid #3A4675; border-radius: 4px; margin-right: 6px">NOTION</span>Read-only. Edit it in Notion, or add a copy to your own todos.</div>
+      </sc-if>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 12px; font-weight: 800; color: #AEB8D6">Due</span>
+        <div style="display: flex; gap: 6px">
+          <span style="flex: 1; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 12px; background: #1A2342; font-weight: 800; font-size: 14px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#AEB8D6" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"></rect><path d="M4 10h16M9 3v4M15 3v4"></path></svg>{{d.date}}</span>
+          <span style="display: flex; align-items: center; height: 38px; padding: 0 12px; border-radius: 12px; background: #1A2342; font-family: 'Pixelify Sans', monospace; font-size: 15px">{{d.time}}</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 12px; font-weight: 800; color: #AEB8D6">Priority</span>
+        <div role="group" aria-label="Priority" style="display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: #0A0E1C">
+          <sc-for list="{{d.pris}}" as="p" hint-placeholder-count="4">
+            <span style="flex: 1; text-align: center; padding: 7px 0; border-radius: 10px; background: {{p.bg}}; color: {{p.color}}; font-weight: 800; font-size: 13px">{{p.label}}</span>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 12px; font-weight: 800; color: #AEB8D6">List</span>
+          <span style="display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 12px; background: #1A2342; font-weight: 800; font-size: 14px"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 3px; background: {{d.listColor}}"></span>{{d.list}}</span>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 12px; font-weight: 800; color: #AEB8D6">Course</span>
+          <span style="display: flex; align-items: center; height: 38px; padding: 0 12px; border-radius: 12px; background: #1A2342; font-weight: 800; font-size: 14px">{{d.course}}</span>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 12px; font-weight: 800; color: #AEB8D6">Repeat</span>
+          <span style="display: flex; align-items: center; height: 38px; padding: 0 12px; border-radius: 12px; background: #1A2342; font-weight: 800; font-size: 14px">{{d.repeat}}</span>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 12px; font-weight: 800; color: #AEB8D6">Reminder</span>
+          <span style="display: flex; align-items: center; height: 38px; padding: 0 12px; border-radius: 12px; background: #1A2342; font-weight: 800; font-size: 14px">{{d.reminder}}</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 12px; font-weight: 800; color: #AEB8D6">Notes</span>
+        <p style="margin: 0; padding: 10px 12px; border-radius: 12px; background: #1A2342; font-size: 14px; line-height: 1.5; font-weight: 600; min-height: 42px">{{d.notes}}</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between">
+          <span style="font-size: 12px; font-weight: 800; color: #AEB8D6">Steps</span>
+          <span style="font-size: 12px; font-weight: 800; color: #AEB8D6">{{d.subProgress}}</span>
+        </div>
+        <sc-for list="{{d.subs}}" as="s" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 6px 4px">
+            <span aria-hidden="true" style="flex: none; width: 18px; height: 18px; border-radius: 6px; border: 2px solid {{s.border}}; background: {{s.bg}}; display: flex; align-items: center; justify-content: center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#06261A" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round" style="opacity: {{s.op}}"><path d="M5 12l5 5 9-10"></path></svg></span>
+            <span style="font-weight: 700; font-size: 14px; color: {{s.color}}; text-decoration: {{s.deco}}">{{s.t}}</span>
+          </div>
+        </sc-for>
+        <button style="align-self: flex-start; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 0; background: transparent; color: #AEB8D6; font-weight: 800; font-size: 13px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add step</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: #0A0E1C">
+        <span style="font-size: 12px; font-weight: 800; color: #AEB8D6">Focus</span>
+        <span style="display: inline-flex; gap: 5px">
+          <sc-for list="{{d.dots}}" as="o" hint-placeholder-count="3"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 6px; border: 2px solid {{bolt}}; background: {{o.bg}}"></span></sc-for>
+        </span>
+        <span style="flex: 1; font-size: 13px; font-weight: 800; text-align: right">{{d.focusText}}</span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <button style="flex: 1 1 140px; height: 44px; border-radius: 22px; border: 0; background: {{accent}}; color: #06261A; font-weight: 800; font-size: 15px; box-shadow: 0 5px 0 #1C8A5B; display: flex; align-items: center; justify-content: center; gap: 8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="#06261A" aria-hidden="true"><path d="M7 4l13 8-13 8z"></path></svg>{{d.primary}}</button>
+        <button style="flex: 1 1 110px; height: 44px; border-radius: 22px; border: 2px solid #3A4675; background: transparent; color: #EEF2FF; font-weight: 800; font-size: 14px">Remind me</button>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; color: #AEB8D6">
+        <span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 4px; background: {{accent}}"></span>Saved</span>
+        <span style="display: flex; gap: 14px"><button style="border: 0; background: transparent; color: #AEB8D6; font-weight: 800; font-size: 13px">Duplicate</button><button style="border: 0; background: transparent; color: #FF9E9E; font-weight: 800; font-size: 13px">Delete</button></span>
+      </div>
+    </aside>
+    </sc-if>
+  </div>
+
+  <!-- undo toast -->
+  <sc-if value="{{hasUndo}}" hint-placeholder-val="{{ false }}">
+    <div role="status" style="position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 10px 10px 10px 18px; border-radius: 24px; background: #070A14; border: 3px solid #EEF2FF; box-shadow: 5px 5px 0 rgba(0,0,0,0.45)">
+      <span style="font-weight: 800; font-size: 14px">Marked done · {{undoTitle}}</span>
+      <button onClick="{{undo}}" style="height: 34px; padding: 0 16px; border-radius: 17px; border: 0; background: {{accent}}; color: #06261A; font-weight: 800; font-size: 13px">Undo</button>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#3EF0A0","options":["#3EF0A0","#7DEBB4","#2FD27A","#8CFF6A"]},"bolt":{"editor":"color","default":"#5AC8FF","options":["#5AC8FF","#3FE6FF","#5B8CFF","#8FD3FF"]},"$preview":{"width":1240,"height":1100}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { view: 'today', sel: 1, done: {}, picked: {}, selectMode: false, notion: true, input: 'laporan robotik besok 18:30 !high #kuliah @robotika ~3p', added: [], undoId: null };
+  }
+  parse(s) {
+    const out = { title: s, due: null, time: '', pri: 0, list: 'Personal', course: '', est: 0, repeat: false };
+    let t = ' ' + s + ' ';
+    const cut = (re, fn) => { const m = t.match(re); if (m) { fn(m); t = t.replace(m[0], ' '); } };
+    cut(/\s!(high|tinggi|3|med|medium|2|low|rendah|1)\b/i, (m) => { const k = m[1].toLowerCase(); out.pri = (k === 'high' || k === 'tinggi' || k === '3') ? 3 : (k === 'med' || k === 'medium' || k === '2') ? 2 : 1; });
+    cut(/\s#(\w+)/, (m) => { const k = m[1].toLowerCase(); out.list = k.charAt(0).toUpperCase() + k.slice(1); });
+    cut(/\s@(\w+)/, (m) => { const k = m[1].toLowerCase(); out.course = k.charAt(0).toUpperCase() + k.slice(1); });
+    cut(/\s~(\d+)p\b/i, (m) => { out.est = parseInt(m[1], 10); });
+    cut(/\s(setiap|every)\s(hari|minggu|day|week)\b/i, () => { out.repeat = true; });
+    cut(/\s(?:jam\s)?(\d{1,2}):(\d{2})\b/, (m) => { out.time = (m[1].length < 2 ? '0' : '') + m[1] + ':' + m[2]; });
+    const wd = { selasa: 0, tue: 0, rabu: 1, wed: 1, kamis: 2, thu: 2, jumat: 3, fri: 3, sabtu: 4, sat: 4, minggu: 5, sun: 5, senin: 6, mon: 6 };
+    cut(/\s(hari ini|today)\b/i, () => { out.due = 0; });
+    cut(/\s(besok|tomorrow)\b/i, () => { out.due = 1; });
+    cut(/\s(lusa)\b/i, () => { out.due = 2; });
+    if (out.due === null) cut(/\s(selasa|tue|rabu|wed|kamis|thu|jumat|fri|sabtu|sat|minggu|sun|senin|mon)\b/i, (m) => { const w = wd[m[1].toLowerCase()]; out.due = w === 0 ? 7 : w; });
+    out.title = t.replace(/\s+/g, ' ').trim();
+    return out;
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#3EF0A0';
+    const bolt = this.props.bolt ?? '#5AC8FF';
+    const boltGlow = /^#[0-9a-fA-F]{6}$/.test(bolt) ? bolt + '55' : bolt;
+    const st = this.state;
+    const LC = { Kuliah: '#8FB4FF', Personal: '#FFC27A', Himatif: '#C49BFF', Magang: '#3EF0A0' };
+    const PR = [{ l: 'None', c: '#AEB8D6' }, { l: 'Low', c: '#8FD3FF' }, { l: 'Medium', c: '#FFC27A' }, { l: 'High', c: '#FF9E9E' }];
+    const DOW = ['Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon'];
+    const dstr = (d) => DOW[((d % 7) + 7) % 7] + ' ' + (3 + d) + ' Nov';
+    const base = [
+      { id: 1, title: 'laporan robotik', due: -2, time: '23:59', pri: 3, list: 'Kuliah', course: 'Robotika', est: 3, fp: 1, remind: false, repeat: false, notion: false, notes: 'PDF, max 8 pages. Ask Dion for the servo data on leg 3.', subs: [['Summarise the servo tests', true], ['Measurement table', true], ['Conclusion', false], ['Upload to Canvas', false]] },
+      { id: 2, title: 'Prak Jarkom', due: 0, time: '18:30', pri: 2, list: 'Kuliah', course: 'Jarkom', est: 0, fp: 0, remind: true, repeat: false, notion: false, notes: 'Bring the laptop and the LAN cable.', subs: [['Install Packet Tracer', true], ['Read module 4', false]] },
+      { id: 3, title: 'beli makan', due: 0, time: '12:00', pri: 0, list: 'Personal', course: '', est: 0, fp: 0, remind: false, repeat: false, notion: false, notes: '', subs: [] },
+      { id: 4, title: 'rapat HIMATIF', due: 0, time: '19:30', pri: 2, list: 'Himatif', course: '', est: 0, fp: 0, remind: true, repeat: true, notion: false, notes: 'Agenda: LPJ and the next event.', subs: [] },
+      { id: 5, title: 'revisi desain Inapr', due: 1, time: '10:00', pri: 3, list: 'Magang', course: '', est: 4, fp: 0, remind: false, repeat: false, notion: false, notes: 'Send the updated screens to the team of 3 first.', subs: [['Home screen', true], ['Detail screen', false], ['Empty states', false]] },
+      { id: 6, title: 'bayar kos', due: 1, time: '', pri: 2, list: 'Personal', course: '', est: 0, fp: 0, remind: false, repeat: true, notion: false, notes: '', subs: [] },
+      { id: 7, title: 'baca jurnal Metpen', due: 3, time: '', pri: 1, list: 'Kuliah', course: 'Metpen', est: 2, fp: 0, remind: false, repeat: false, notion: false, notes: 'Pick 3 papers for the literature table.', subs: [] },
+      { id: 8, title: 'Quiz Etprof', due: 2, time: '09:00', pri: 0, list: 'Kuliah', course: 'Etprof', est: 0, fp: 0, remind: false, repeat: false, notion: true, notes: '', subs: [] },
+      { id: 9, title: 'Tugas Metpen bab 2', due: 5, time: '', pri: 0, list: 'Kuliah', course: 'Metpen', est: 0, fp: 0, remind: false, repeat: false, notion: true, notes: '', subs: [] },
+      { id: 10, title: 'cuci baju', due: null, time: '', pri: 0, list: 'Personal', course: '', est: 0, fp: 0, remind: false, repeat: false, notion: false, notes: '', subs: [] },
+      { id: 11, title: 'beli kabel LAN', due: null, time: '', pri: 0, list: 'Personal', course: '', est: 0, fp: 0, remind: false, repeat: false, notion: false, notes: '', subs: [] },
+      { id: 12, title: 'email dosen Etprof', due: null, time: '', pri: 1, list: 'Kuliah', course: 'Etprof', est: 0, fp: 0, remind: false, repeat: false, notion: false, notes: '', subs: [] },
+      { id: 13, title: 'kirim laporan ke Dion', due: -1, time: '', pri: 1, list: 'Kuliah', course: '', est: 0, fp: 0, remind: false, repeat: false, notion: false, notes: '', subs: [], preDone: true },
+      { id: 14, title: 'beli tinta printer', due: 0, time: '', pri: 0, list: 'Personal', course: '', est: 0, fp: 0, remind: false, repeat: false, notion: false, notes: '', subs: [], preDone: true }
+    ];
+    const T = base.concat(st.added);
+    const isDone = (t) => (st.done[t.id] !== undefined ? st.done[t.id] : !!t.preDone);
+    const shown = (t) => !(t.notion && !st.notion);
+    const inView = (t, v) => {
+      const d = isDone(t);
+      if (v === 'today') return !d && t.due !== null && t.due <= 0;
+      if (v === 'upcoming') return !d && t.due !== null && t.due > 0;
+      if (v === 'inbox') return !d && t.due === null;
+      if (v === 'overdue') return !d && t.due !== null && t.due < 0;
+      if (v === 'done') return d;
+      return true;
+    };
+    const VN = [['today', 'Today'], ['upcoming', 'Upcoming'], ['inbox', 'Inbox'], ['overdue', 'Overdue'], ['done', 'Done'], ['all', 'All']];
+    const views = VN.map((v) => {
+      const on = st.view === v[0];
+      const n = T.filter((t) => shown(t) && inView(t, v[0])).length;
+      return { name: v[1], count: n, selected: on ? 'true' : 'false', bg: on ? accent : 'transparent', color: on ? '#06261A' : '#AEB8D6', pillBg: on ? 'rgba(6,38,26,0.2)' : (v[0] === 'overdue' && n > 0 ? '#2A1820' : '#1A2342'), pillColor: on ? '#06261A' : (v[0] === 'overdue' && n > 0 ? '#FF9E9E' : '#AEB8D6'), pick: () => this.setState({ view: v[0] }) };
+    });
+    const vis = T.filter((t) => shown(t) && inView(t, st.view));
+    vis.sort((a, b) => {
+      const da = a.due === null ? 99 : a.due; const db = b.due === null ? 99 : b.due;
+      if (da !== db) return da - db;
+      const ta = a.time || '99:99'; const tb = b.time || '99:99';
+      return ta < tb ? -1 : ta > tb ? 1 : 0;
+    });
+    const gkey = (t) => (isDone(t) && st.view !== 'done' ? 'zdone' : (t.due === null ? 'none' : (t.due < 0 ? 'overdue' : String(t.due))));
+    const gtitle = (k) => (k === 'overdue' ? 'Overdue' : k === 'none' ? 'No date' : k === 'zdone' ? 'Completed' : k === '0' ? 'Today · ' + dstr(0) : k === '1' ? 'Tomorrow · ' + dstr(1) : dstr(parseInt(k, 10)));
+    const toneFor = (t) => (t.due === null ? ['#1A2342', '#AEB8D6'] : t.due < 0 ? ['#2A1820', '#FF9E9E'] : t.due === 0 ? ['#1A2342', '#EEF2FF'] : ['#1A2342', '#AEB8D6']);
+    const dueLabel = (t) => (t.due === null ? '' : t.due < 0 ? (-t.due) + (t.due === -1 ? ' day overdue' : ' days overdue') : t.due === 0 ? 'Today' + (t.time ? ' ' + t.time : '') : t.due === 1 ? 'Tomorrow' + (t.time ? ' ' + t.time : '') : dstr(t.due) + (t.time ? ' ' + t.time : ''));
+    const order = []; const gmap = {};
+    vis.forEach((t) => { const k = st.view === 'done' ? 'zdone' : gkey(t); if (!gmap[k]) { gmap[k] = []; order.push(k); } gmap[k].push(t); });
+    order.sort((a, b) => { const w = (k) => (k === 'overdue' ? -1 : k === 'none' ? 98 : k === 'zdone' ? 99 : parseInt(k, 10)); return w(a) - w(b); });
+    const rowOf = (t) => {
+      const d = isDone(t); const tone = toneFor(t); const picked = !!st.picked[t.id];
+      const sd = t.subs.filter((s) => s[1]).length;
+      const inSel = st.selectMode;
+      return {
+        title: t.title, notion: t.notion, bg: t.id === st.sel ? '#1B2547' : '#1A2342', border: t.id === st.sel ? bolt : 'transparent',
+        checkBg: inSel ? (picked ? bolt : 'transparent') : (d ? accent : 'transparent'), checkBorder: inSel ? (picked ? bolt : '#3A4675') : (d ? accent : '#3A4675'), checkOpacity: inSel ? (picked ? '1' : '0') : (d ? '1' : '0'),
+        titleColor: d ? '#7F8AAE' : '#EEF2FF', deco: d ? 'line-through' : 'none',
+        toggleLabel: (inSel ? 'Select: ' : d ? 'Mark not done: ' : 'Mark done: ') + t.title, pressed: (inSel ? picked : d) ? 'true' : 'false',
+        showDue: t.due !== null, due: dueLabel(t), dueBg: tone[0], dueColor: tone[1],
+        showPri: t.pri > 0, priLabel: PR[t.pri].l, priColor: PR[t.pri].c,
+        list: t.list, listColor: LC[t.list] || '#AEB8D6', showCourse: !!t.course, course: t.course,
+        showSubs: t.subs.length > 0, subs: sd + '/' + t.subs.length, showRepeat: t.repeat, showEst: t.est > 0, est: t.fp + '/' + t.est + ' focus', remind: t.remind,
+        select: () => this.setState({ sel: t.id }),
+        toggle: () => {
+          if (inSel) { const p = Object.assign({}, st.picked); p[t.id] = !p[t.id]; this.setState({ picked: p }); return; }
+          const n = Object.assign({}, st.done); n[t.id] = !d; this.setState({ done: n, undoId: d ? null : t.id });
+        }
+      };
+    };
+    const groups = order.map((k) => ({ title: gtitle(k), color: k === 'overdue' ? '#FF9E9E' : (k === 'none' || k === 'zdone' ? '#AEB8D6' : '#EEF2FF'), count: gmap[k].length, rows: gmap[k].map(rowOf) }));
+    const cur = T.find((t) => t.id === st.sel);
+    const hasSel = !!cur && shown(cur);
+    const c = cur || T[0];
+    const csd = c.subs.filter((s) => s[1]).length;
+    const d = {
+      title: c.title, notion: c.notion, date: c.due === null ? 'No date' : dstr(c.due), time: c.time || '—', list: c.list, listColor: LC[c.list] || '#AEB8D6', course: c.course || 'None',
+      repeat: c.repeat ? 'Weekly' : 'None', reminder: c.remind ? '30 min before' : 'Off', notes: c.notion ? 'Notes live in Notion.' : (c.notes || 'No notes yet.'),
+      pris: PR.map((p, i) => ({ label: p.l, bg: i === c.pri ? '#26325F' : 'transparent', color: i === c.pri ? p.c : '#AEB8D6' })),
+      subs: c.subs.map((s) => ({ t: s[0], bg: s[1] ? accent : 'transparent', border: s[1] ? accent : '#3A4675', op: s[1] ? '1' : '0', color: s[1] ? '#7F8AAE' : '#EEF2FF', deco: s[1] ? 'line-through' : 'none' })),
+      subProgress: c.subs.length ? csd + ' of ' + c.subs.length : 'none',
+      dots: Array.from({ length: c.est }, (_, i) => ({ bg: i < c.fp ? bolt : 'transparent' })),
+      focusText: c.est ? c.fp + ' of ' + c.est + ' sessions' : 'No estimate', primary: c.notion ? 'Add to my todos' : 'Start focus'
+    };
+    const p = this.parse(st.input);
+    const parsed = [{ kind: 'title', text: p.title || '—', color: '#EEF2FF' }];
+    if (p.due !== null) parsed.push({ kind: 'due', text: (p.due === 0 ? 'Today' : p.due === 1 ? 'Tomorrow' : dstr(p.due)) + (p.time ? ' ' + p.time : ''), color: '#EEF2FF' });
+    else if (p.time) parsed.push({ kind: 'time', text: p.time, color: '#EEF2FF' });
+    if (p.pri) parsed.push({ kind: 'priority', text: PR[p.pri].l, color: PR[p.pri].c });
+    parsed.push({ kind: 'list', text: p.list, color: LC[p.list] || '#AEB8D6' });
+    if (p.course) parsed.push({ kind: 'course', text: p.course, color: '#EEF2FF' });
+    if (p.est) parsed.push({ kind: 'estimate', text: p.est + ' sessions', color: bolt });
+    if (p.repeat) parsed.push({ kind: 'repeat', text: 'Repeats', color: '#EEF2FF' });
+    const examples = ['kirim proposal jumat 14:00 !med #himatif', 'cuci baju', 'bayar kos setiap minggu !high'].map((s) => ({ text: s, pick: () => this.setState({ input: s }) }));
+    const todayOpen = T.filter((t) => shown(t) && !isDone(t) && t.due === 0).length;
+    const overdueOpen = T.filter((t) => shown(t) && !isDone(t) && t.due !== null && t.due < 0).length;
+    const subtitle = todayOpen + ' due today · ' + overdueOpen + ' overdue · ' + T.filter((t) => shown(t) && !isDone(t)).length + ' open in total';
+    const pickedCount = Object.keys(st.picked).filter((k) => st.picked[k]).length;
+    const undoT = T.find((t) => t.id === st.undoId);
+    const EM = { today: 'Nothing due today. Enjoy the quiet.', upcoming: 'Nothing coming up.', inbox: 'Inbox is clear.', overdue: 'Nothing overdue. Nice.', done: 'Nothing completed yet.', all: 'No todos yet. Add one above.' };
+    return {
+      accent, bolt, boltGlow, subtitle, views, groups, d, hasSel, parsed, examples,
+      input: st.input, viewTitle: VN.find((v) => v[0] === st.view)[1], empty: groups.length === 0, emptyText: EM[st.view],
+      selectMode: st.selectMode, selectLabel: st.selectMode ? 'Cancel' : 'Select', selectPressed: st.selectMode ? 'true' : 'false', selectBorder: st.selectMode ? bolt : '#3A4675', selectBg: st.selectMode ? '#1B2547' : 'transparent', pickedCount,
+      notionOn: st.notion ? 'true' : 'false', notionTrack: st.notion ? accent : '#3A4675', notionKnob: st.notion ? '14px' : '2px',
+      hasUndo: !!undoT, undoTitle: undoT ? undoT.title : '',
+      onInput: (e) => this.setState({ input: e && e.target ? e.target.value : st.input }),
+      addTodo: () => {
+        const q = this.parse(st.input); if (!q.title) return;
+        const nt = { id: 100 + st.added.length, title: q.title, due: q.due, time: q.time, pri: q.pri, list: q.list, course: q.course, est: q.est, fp: 0, remind: false, repeat: q.repeat, notion: false, notes: '', subs: [] };
+        this.setState({ added: st.added.concat([nt]), input: '', sel: nt.id });
+      },
+      toggleSelect: () => this.setState({ selectMode: !st.selectMode, picked: {} }),
+      toggleNotion: () => this.setState({ notion: !st.notion }),
+      closeDrawer: () => this.setState({ sel: null }),
+      undo: () => { const n = Object.assign({}, st.done); n[st.undoId] = false; this.setState({ done: n, undoId: null }); },
+      bulkComplete: () => { const n = Object.assign({}, st.done); Object.keys(st.picked).forEach((k) => { if (st.picked[k]) n[k] = true; }); this.setState({ done: n, picked: {}, selectMode: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

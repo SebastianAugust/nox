@@ -9,6 +9,7 @@ import { Card, Toggle } from "../../components/ui/controls";
 import { NAV_ITEMS } from "../nav";
 import { SettingRow, TextSetting } from "../widgets/SettingControls";
 import { PlacesManager } from "../widgets/Places";
+import { ListsManager } from "../widgets/ListsManager";
 
 const TEXT_SETTINGS = [
   { key: "user_name", label: "set.userName" },
@@ -24,6 +25,7 @@ const FEATURE_SETTINGS = [
   { key: "dnd_during_pomodoro", label: "set.dnd" },
   { key: "friction_starter_enabled", label: "set.friction" },
   { key: "autostart", label: "set.autostart" },
+  { key: "ai_capture_enabled", label: "set.capture", hint: "set.captureHint" },
 ] as const;
 
 const TIME_SETTINGS = [
@@ -121,7 +123,7 @@ export default function PageSettings() {
       <Card title={t("set.features")}>
         <div className="settings">
           {FEATURE_SETTINGS.map((s) => (
-            <SettingRow key={s.key} label={t(s.label)}>
+            <SettingRow key={s.key} label={t(s.label)} hint={"hint" in s ? t(s.hint) : undefined}>
               <Toggle
                 label={t(s.label)}
                 on={values[s.key] === "true"}
@@ -161,6 +163,10 @@ export default function PageSettings() {
             </SettingRow>
           ))}
         </div>
+      </Card>
+
+      <Card title={t("lists.title")}>
+        <ListsManager />
       </Card>
 
       <Card title={t("set.places")}>

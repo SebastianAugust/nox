@@ -13,6 +13,8 @@ import { urgency } from "./deadlines";
 import { locale, t } from "./i18n";
 import { quickReply } from "./ollama";
 import { getWeather, weatherLine } from "./weather";
+import { getEvents } from "./calendar";
+import { eventsOn, localClock } from "./calendarLogic";
 
 /**
  * Fires the morning briefing once a day at `briefing_time` (local time in the
@@ -32,12 +34,13 @@ const clock = (stamp: string) => {
 /** Gather the facts. Every list comes from the database, never the model. */
 export async function gatherBriefing(now = new Date()): Promise<BriefingData> {
   const today = todayLocal();
-  const [assignments, todos, habits, reminders, weather] = await Promise.all([
+  const [assignments, todos, habits, reminders, weather, events] = await Promise.all([
     getOpenAssignments(0, 100),
     getTodosFiltered("pending", 500),
     getTodayHabitLogs(),
     getTodayReminders(),
     getWeather().catch(() => null),
+    getEvents(today, today).catch(() => []),
   ]);
   const words = { today: t("date.today"), tomorrow: t("date.tomorrow") };
 
@@ -57,6 +60,10 @@ export async function gatherBriefing(now = new Date()): Promise<BriefingData> {
   return {
     dateLabel: now.toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" }),
     weather: weather ? weatherLine(weather) : null,
+    events: eventsOn(events, today).map((e) => ({
+      title: e.title,
+      detail: [e.all_day ? t("cmd.schedule.allDay") : `${localClock(e.start)}–${localClock(e.end)}`, e.location].filter(Boolean).join(" · "),
+    })),
     deadlinesToday,
     overdue,
     todosToday,
